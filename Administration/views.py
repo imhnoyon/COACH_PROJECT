@@ -4,6 +4,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import render
 from rest_framework import status
 from rest_framework.views import APIView, Response
+
+from Administration.models import Category
 from .serializers import CategorySerializer
 from utils.api_response import APIResponse
 from rest_framework.permissions import IsAdminUser
@@ -13,7 +15,7 @@ class CategoryCreateView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        serializer = CategorySerializer(data=request.data)
+        serializer = CategorySerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
             serializer.save()
@@ -28,3 +30,7 @@ class CategoryCreateView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+        
+        
+
+    

@@ -21,7 +21,7 @@ class IsAdminOrBarber(permissions.BasePermission):
         )
 
 
-class IsBarberUser(permissions.BasePermission):
-    """Only allows barber users to access"""
+class IsProviderUser(permissions.BasePermission):
+    """Only allows provider users to access"""
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role == "barber"
+        return request.user.is_authenticated and request.user.role == "Provider"

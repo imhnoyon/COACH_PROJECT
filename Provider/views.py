@@ -1,3 +1,184 @@
-from django.shortcuts import render
+from django.db import transaction
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from utils.permissions import IsProviderUser
+from Administration.models import Category
+from Administration.serializers import CategorySerializer
+from utils.api_response import APIResponse
 
-# Create your views here.
+from .models import CoachProfile, Certification, Qualification
+from .serializers import CoachProfileDetailSerializer, CreateCoachProfileSerializer
+
+
+class CategoryListView(APIView):
+    def get(self, request):
+        categories = Category.objects.filter(is_active=True)
+        serializer = CategorySerializer(categories, many=True, context={'request': request})
+        return APIResponse.success(
+            message="Categories retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class CoachProfileView(APIView):
+    permission_classes = [IsAuthenticated,IsProviderUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self, user):
+        """Fetch coach profile with prefetching to avoid N+1 query problem."""
+        return CoachProfile.objects.filter(user=user)\
+            .select_related('user')\
+            .prefetch_related('categories', 'certifications', 'qualifications')\
+            .first()
+
+    def get(self, request):
+        """Retrieve current authenticated coach profile."""
+        profile = self.get_queryset(request.user)
+        if not profile:
+            return APIResponse.error(
+                message="Coach profile not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = CoachProfileDetailSerializer(profile, context={'request': request})
+        return APIResponse.success(
+            message="Coach profile retrieved successfully.",
+            data=serializer.data
+        )
+
+    def post(self, request):
+        """Create or update coach profile with photo, about, categories & certificates."""
+        # 1. Parse category_ids from request
+        category_ids = request.POST.getlist('category_ids') or request.POST.getlist('category_ids[]')
+
+        # 2. Validate request data
+        serializer = CreateCoachProfileSerializer(data=request.data)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation error",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Save profile and related models atomically
+        with transaction.atomic():
+            profile, created = CoachProfile.objects.update_or_create(
+                user=request.user,
+                defaults={
+                    'about': serializer.validated_data['about'],
+                    'profile_photo': serializer.validated_data['profile_photo'],
+                    'introduction_video': serializer.validated_data.get('introduction_video'),
+                    'expertises': serializer.validated_data.get('expertises', []),
+                    'is_completed': True,
+                }
+            )
+
+            # Assign categories
+            if category_ids:
+                profile.categories.set(category_ids)
+
+            # Save certifications and qualifications
+            self._save_certifications(request, profile)
+            self._save_qualifications(request, profile)
+
+        # 4. Fetch fresh optimized profile & return response
+        updated_profile = self.get_queryset(request.user)
+        res_serializer = CoachProfileDetailSerializer(updated_profile, context={'request': request})
+
+        msg = "Coach profile created successfully." if created else "Coach profile updated successfully."
+        return APIResponse.success(
+            message=msg,
+            data=res_serializer.data,
+            status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        )
+
+    def patch(self, request):
+        """Update coach profile fields (partial or full) at the same endpoint."""
+        profile = self.get_queryset(request.user)
+        if not profile:
+            return APIResponse.error(
+                message="Coach profile not found. Create profile first.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        category_ids = request.POST.getlist('category_ids') or request.POST.getlist('category_ids[]')
+
+        serializer = CreateCoachProfileSerializer(profile, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation error",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            serializer.save()
+
+            if category_ids:
+                profile.categories.set(category_ids)
+
+            if any('certification' in k for k in request.POST) or any('certification' in k for k in request.FILES):
+                self._save_certifications(request, profile)
+
+            if any('qualification' in k for k in request.POST) or any('qualification' in k for k in request.FILES):
+                self._save_qualifications(request, profile)
+
+        updated_profile = self.get_queryset(request.user)
+        res_serializer = CoachProfileDetailSerializer(updated_profile, context={'request': request})
+        return APIResponse.success(
+            message="Coach profile updated successfully.",
+            data=res_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+    def _save_certifications(self, request, profile):
+        """Helper method to parse and save certifications."""
+        names = request.POST.getlist('certification_names') or request.POST.getlist('certifications_name')
+        docs = request.FILES.getlist('certification_documents') or request.FILES.getlist('certifications_document')
+
+        # Check indexed format (certifications[0][name], certifications[0][document])
+        idx = 0
+        items = []
+        while f'certifications[{idx}][name]' in request.POST:
+            name = request.POST.get(f'certifications[{idx}][name]')
+            doc = request.FILES.get(f'certifications[{idx}][document]')
+            if name and doc:
+                items.append((name, doc))
+            idx += 1
+
+        if items:
+            profile.certifications.all().delete()
+            for name, doc in items:
+                Certification.objects.create(coach=profile, name=name, document=doc)
+        elif names and docs:
+            profile.certifications.all().delete()
+            for name, doc in zip(names, docs):
+                Certification.objects.create(coach=profile, name=name, document=doc)
+
+    def _save_qualifications(self, request, profile):
+        """Helper method to parse and save qualifications."""
+        names = request.POST.getlist('qualification_names') or request.POST.getlist('qualifications_name')
+        docs = request.FILES.getlist('qualification_documents') or request.FILES.getlist('qualifications_document')
+
+        # Check indexed format (qualifications[0][name], qualifications[0][document])
+        idx = 0
+        items = []
+        while f'qualifications[{idx}][name]' in request.POST:
+            name = request.POST.get(f'qualifications[{idx}][name]')
+            doc = request.FILES.get(f'qualifications[{idx}][document]')
+            if name and doc:
+                items.append((name, doc))
+            idx += 1
+
+        if items:
+            profile.qualifications.all().delete()
+            for name, doc in items:
+                Qualification.objects.create(coach=profile, name=name, document=doc)
+        elif names and docs:
+            profile.qualifications.all().delete()
+            for name, doc in zip(names, docs):
+                Qualification.objects.create(coach=profile, name=name, document=doc)
+
