@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'Authentication',
     'Administration',
     'Provider',
+    'User',
     
     # Third party packages
     'rest_framework',

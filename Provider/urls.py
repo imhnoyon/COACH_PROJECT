@@ -7,4 +7,7 @@ urlpatterns = [
     path('services/create/', ServiceCreateView.as_view(), name='service-create'),
     path('services/<int:service_id>/', ServiceCreateView.as_view(), name='service-detail'),
     path('retrive-services/<int:service_id>/', ServiceCreateView.as_view(), name='service-detail'),
+    path('blogs/create/', BlogCreateView.as_view(), name='blog-create'),
+    path('blogs/<int:blog_id>/', BlogCreateView.as_view(), name='blog-detail'),
+
 ]

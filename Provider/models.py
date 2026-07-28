@@ -94,3 +94,29 @@ class ClientBenefit(models.Model):
 
     def __str__(self):
         return self.outcome
+    
+    
+    
+    
+class Blog(models.Model):
+    STATUS_CHOICES = (
+        ("draft", "Draft"),
+        ("published", "Published"),
+        
+    )
+    coach = models.ForeignKey(User,on_delete=models.CASCADE,related_name="blogs")
+    category = models.ForeignKey(Category,on_delete=models.CASCADE,related_name="blogs")
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    image = models.ImageField(upload_to="coach/blogs/",blank=True,null=True)
+    status = models.CharField(max_length=20,choices=STATUS_CHOICES,default="published")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+    
+    
+    
+    

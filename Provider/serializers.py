@@ -128,3 +128,32 @@ class ServiceCreateSerializer(serializers.ModelSerializer):
             'description': obj.category.description,
         }
         
+        
+
+class BlogSerializer(serializers.ModelSerializer):
+    category_details = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Blog
+        fields = [
+            'id',
+            'coach',
+            'category',
+            'category_details',
+            'title',
+            'content',
+            'image',
+            'status',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['coach', 'created_at', 'updated_at']
+
+    def get_category_details(self, obj):
+        if not obj.category:
+            return None
+        return {
+            'id': obj.category.id,
+            'name': obj.category.name,
+            'description': obj.category.description,
+        }

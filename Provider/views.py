@@ -287,3 +287,54 @@ class ServiceCreateView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+        
+        
+        
+class BlogCreateView(APIView):
+    permission_classes = [IsAuthenticated, IsProviderUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request):
+        serializer = BlogSerializer(data=request.data)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation error",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        blog = serializer.save(coach=request.user)
+
+        res_serializer = BlogSerializer(blog, context={'request': request})
+        return APIResponse.success(
+            message="Blog created successfully.",
+            data=res_serializer.data,
+            status_code=status.HTTP_201_CREATED
+        )
+        
+    def patch(self, request, blog_id):
+        """Update an existing blog."""
+        try:
+            blog = Blog.objects.get(id=blog_id, coach=request.user)
+        except Blog.DoesNotExist:
+            return APIResponse.error(
+                message="Blog not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = BlogSerializer(blog, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation error",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer.save()
+
+        res_serializer = BlogSerializer(blog, context={'request': request})
+        return APIResponse.success(
+            message="Blog updated successfully.",
+            data=res_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
