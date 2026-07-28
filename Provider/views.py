@@ -1,15 +1,16 @@
+import json
 from django.db import transaction
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from utils.permissions import IsProviderUser
 from Administration.models import Category
 from Administration.serializers import CategorySerializer
 from utils.api_response import APIResponse
 
 from .models import CoachProfile, Certification, Qualification
-from .serializers import CoachProfileDetailSerializer, CreateCoachProfileSerializer
+from .serializers import *
 
 
 class CategoryListView(APIView):
@@ -182,3 +183,107 @@ class CoachProfileView(APIView):
             for name, doc in zip(names, docs):
                 Qualification.objects.create(coach=profile, name=name, document=doc)
 
+
+
+class ServiceCreateView(APIView):
+    permission_classes = [IsAuthenticated, IsProviderUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request):
+        serializer = ServiceCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation error",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            service = serializer.save(coach=request.user)
+
+            # Handle benefits list (supports JSON list or form-data)
+            benefits_data = request.data.get('benefits') or request.POST.getlist('benefits') or request.POST.getlist('benefits[]')
+            if isinstance(benefits_data, str):
+                try:
+                    benefits_data = json.loads(benefits_data)
+                except Exception:
+                    benefits_data = [x.strip() for x in benefits_data.split(',') if x.strip()]
+
+            if isinstance(benefits_data, list):
+                for item in benefits_data:
+                    outcome_text = item.get('outcome') if isinstance(item, dict) else str(item)
+                    if outcome_text and outcome_text.strip():
+                        ClientBenefit.objects.create(service=service, outcome=outcome_text.strip())
+
+        # Prefetch related benefits for serialized response
+        updated_service = Service.objects.prefetch_related('benefits').get(id=service.id)
+        res_serializer = ServiceCreateSerializer(updated_service, context={'request': request})
+        return APIResponse.success(
+            message="Service created successfully.",
+            data=res_serializer.data,
+            status_code=status.HTTP_201_CREATED
+        )
+        
+        
+    def patch(self, request, service_id):
+        """Update an existing service."""
+        try:
+            service = Service.objects.get(id=service_id, coach=request.user)
+        except Service.DoesNotExist:
+            return APIResponse.error(
+                message="Service not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ServiceCreateSerializer(service, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation error",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            serializer.save()
+
+            # Handle benefits update
+            benefits_data = request.data.get('benefits') or request.POST.getlist('benefits') or request.POST.getlist('benefits[]')
+            if isinstance(benefits_data, str):
+                try:
+                    benefits_data = json.loads(benefits_data)
+                except Exception:
+                    benefits_data = [x.strip() for x in benefits_data.split(',') if x.strip()]
+
+            if isinstance(benefits_data, list):
+                service.benefits.all().delete()
+                for item in benefits_data:
+                    outcome_text = item.get('outcome') if isinstance(item, dict) else str(item)
+                    if outcome_text and outcome_text.strip():
+                        ClientBenefit.objects.create(service=service, outcome=outcome_text.strip())
+
+        updated_service = Service.objects.prefetch_related('benefits').get(id=service.id)
+        res_serializer = ServiceCreateSerializer(updated_service, context={'request': request})
+        return APIResponse.success(
+            message="Service updated successfully.",
+            data=res_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+    def get(self, request, service_id):
+        """Retrieve a specific service by ID."""
+        try:
+            service = Service.objects.prefetch_related('benefits').get(id=service_id, coach=request.user)
+        except Service.DoesNotExist:
+            return APIResponse.error(
+                message="Service not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ServiceCreateSerializer(service, context={'request': request})
+        return APIResponse.success(
+            message="Service retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )

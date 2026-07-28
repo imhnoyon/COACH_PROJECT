@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CoachProfile, Certification, Qualification
+from .models import *
 
 
 @admin.register(CoachProfile)
@@ -28,3 +28,17 @@ class QualificationAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     list_filter = ('created_at',)
     ordering = ('-created_at',)
+
+
+@admin.register(Service)
+class ServiceAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'category', 'coach', 'service_type', 'session_format', 'booking_type', 'status', 'created_at', 'updated_at')
+    search_fields = ('title',)
+    list_filter = ('service_type', 'session_format', 'booking_type', 'status', 'created_at', 'updated_at')
+    ordering = ('-created_at',)
+    
+    
+@admin.register(ClientBenefit)
+class ClientBenefitAdmin(admin.ModelAdmin):
+    list_display = ('id', 'service', 'outcome')
+    search_fields = ('outcome',)

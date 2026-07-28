@@ -3,7 +3,7 @@ from rest_framework import serializers
 from Administration.models import Category
 from Administration.serializers import CategorySerializer
 from Authentication.models import User
-from .models import CoachProfile, Certification, Qualification
+from .models import *
 
 
 class CertificationSerializer(serializers.ModelSerializer):
@@ -77,3 +77,54 @@ class CreateCoachProfileSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("Expertises must be a list of strings.")
         return value
+
+
+# Service creation serializer
+class BenefitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClientBenefit
+        fields = ['id', 'outcome']
+
+
+class ServiceCreateSerializer(serializers.ModelSerializer):
+    benefits = BenefitSerializer(many=True, read_only=True)
+    category=serializers.SerializerMethodField(read_only=True)
+
+    
+
+    class Meta:
+        model = Service
+        fields = [
+            'id',
+            'coach',
+            'title',
+            'description',
+            'service_type',
+            'session_format',
+            'session_duration',
+            'currency',
+            'price',
+            'booking_type',
+            'who_is_this_service_for',
+            'preparation_instructions',
+            'cancellation_policy',
+            'session_url',
+            'status',
+            'benefits',
+            'category',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['coach', 'created_at', 'updated_at']
+        
+        
+        
+    def get_category(self, obj):
+        if not obj.category:
+            return None
+        return {
+            'id': obj.category.id,
+            'name': obj.category.name,
+            'description': obj.category.description,
+        }
+        
