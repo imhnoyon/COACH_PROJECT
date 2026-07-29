@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'Administration',
     'Provider',
     'User',
+    'Payments',
     
     # Third party packages
     'rest_framework',
