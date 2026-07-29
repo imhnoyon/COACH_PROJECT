@@ -180,3 +180,12 @@ EMAIL_USE_SSL=False
 EMAIL_HOST_USER = env('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
+
+
+
+
+# PayPal Configuration
+PAYPAL_MODE = env('PAYPAL_MODE', default='sandbox')
+PAYPAL_CLIENT_ID = env('PAYPAL_CLIENT_ID', default='sandbox_client_id')
+PAYPAL_CLIENT_SECRET = env('PAYPAL_CLIENT_SECRET', default='sandbox_client_secret')
+PAYPAL_WEBHOOK_ID = env('PAYPAL_WEBHOOK_ID', default='')

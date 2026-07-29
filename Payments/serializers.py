@@ -2,7 +2,14 @@ from datetime import datetime
 from rest_framework import serializers
 from Authentication.models import User
 from Provider.models import Service, CoachProfile
-from .models import ServiceBooking
+from .models import (
+    ServiceBooking,
+    Payment,
+    ProviderWallet,
+    WithdrawalRequest,
+    Refund,
+    PaymentLog
+)
 
 
 class UserSimpleSerializer(serializers.ModelSerializer):
@@ -65,9 +72,9 @@ class ServiceBookingCreateSerializer(serializers.Serializer):
     service_id = serializers.IntegerField()
     booking_date = serializers.DateField()
     booking_time = serializers.CharField()
-    # session_type = serializers.CharField(required=False, allow_blank=True)
-    # session_format = serializers.CharField(required=False, allow_blank=True)
-    # notes = serializers.CharField(required=False, allow_blank=True)
+    session_type = serializers.CharField(required=False, allow_blank=True)
+    session_format = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
 
     def validate_service_id(self, value):
         try:
@@ -79,7 +86,6 @@ class ServiceBookingCreateSerializer(serializers.Serializer):
         return value
 
     def validate_booking_time(self, value):
-        # Support formats like '11:00 AM', '11:00PM', '11:00:00', '11:00'
         time_formats = ['%I:%M %p', '%I:%M%p', '%H:%M:%S', '%H:%M']
         for fmt in time_formats:
             try:
@@ -95,16 +101,16 @@ class ServiceBookingCreateSerializer(serializers.Serializer):
         user = self.context['request'].user
 
         booking_time = validated_data.pop('booking_time')
-        # session_type = validated_data.get('session_type') or service.service_type
-        # session_format = validated_data.get('session_format') or service.session_format
+        session_type = validated_data.get('session_type') or service.service_type
+        session_format = validated_data.get('session_format') or service.session_format
 
         booking = ServiceBooking.objects.create(
             user=user,
             coach=service.coach,
             service=service,
             booking_time=booking_time,
-            # session_type=session_type,
-            # session_format=session_format,
+            session_type=session_type,
+            session_format=session_format,
             amount=service.price,
             currency=service.currency,
             **validated_data
@@ -138,3 +144,106 @@ class ServiceBookingDetailSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    customer = UserSimpleSerializer(read_only=True)
+    provider = UserSimpleSerializer(read_only=True)
+
+    class Meta:
+        model = Payment
+        fields = [
+            'id',
+            'order',
+            'customer',
+            'provider',
+            'total_amount',
+            'platform_commission',
+            'provider_amount',
+            'paypal_order_id',
+            'paypal_capture_id',
+            'payment_status',
+            'payment_method',
+            'captured_at',
+            'created_at',
+            'updated_at',
+        ]
+
+
+class ProviderWalletSerializer(serializers.ModelSerializer):
+    provider = UserSimpleSerializer(read_only=True)
+
+    class Meta:
+        model = ProviderWallet
+        fields = [
+            'id',
+            'provider',
+            'available_balance',
+            'pending_balance',
+            'total_earned',
+            'total_withdrawn',
+            'updated_at',
+        ]
+
+
+class WithdrawalRequestSerializer(serializers.ModelSerializer):
+    provider = UserSimpleSerializer(read_only=True)
+    approved_by = UserSimpleSerializer(read_only=True)
+
+    class Meta:
+        model = WithdrawalRequest
+        fields = [
+            'id',
+            'provider',
+            'amount',
+            'paypal_email',
+            'status',
+            'paypal_payout_batch_id',
+            'paypal_payout_item_id',
+            'approved_by',
+            'approved_at',
+            'paid_at',
+            'rejection_reason',
+            'created_at',
+        ]
+
+
+class RefundSerializer(serializers.ModelSerializer):
+    payment = PaymentSerializer(read_only=True)
+    refunded_by = UserSimpleSerializer(read_only=True)
+
+    class Meta:
+        model = Refund
+        fields = [
+            'id',
+            'payment',
+            'refund_amount',
+            'paypal_refund_id',
+            'refunded_by',
+            'refunded_at',
+            'reason',
+        ]
+
+
+class CreatePaymentInputSerializer(serializers.Serializer):
+    booking_id = serializers.IntegerField()
+    return_url = serializers.URLField(required=False, allow_blank=True)
+    cancel_url = serializers.URLField(required=False, allow_blank=True)
+
+
+class CapturePaymentInputSerializer(serializers.Serializer):
+    paypal_order_id = serializers.CharField()
+
+
+class RefundInputSerializer(serializers.Serializer):
+    payment_id = serializers.IntegerField()
+    reason = serializers.CharField(required=False, allow_blank=True)
+
+
+class WithdrawalRequestInputSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    paypal_email = serializers.EmailField()
+
+
+class RejectWithdrawalInputSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=False, allow_blank=True)
