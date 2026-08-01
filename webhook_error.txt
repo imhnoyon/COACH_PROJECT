@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "C:\Users\mahed\Documents\Mahedi\Coach\COACH_PROJECT\Payments\views.py", line 301, in post
+    wallet.balance += provider_earnings
+TypeError: unsupported operand type(s) for +=: 'float' and 'decimal.Decimal'

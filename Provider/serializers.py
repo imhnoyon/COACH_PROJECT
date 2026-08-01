@@ -89,9 +89,12 @@ class BenefitSerializer(serializers.ModelSerializer):
 
 class ServiceCreateSerializer(serializers.ModelSerializer):
     benefits = BenefitSerializer(many=True, read_only=True)
-    category=serializers.SerializerMethodField(read_only=True)
-
-    
+    category = serializers.SerializerMethodField(read_only=True)
+    category_write = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source='category',
+        write_only=True
+    )
 
     class Meta:
         model = Service
@@ -113,10 +116,21 @@ class ServiceCreateSerializer(serializers.ModelSerializer):
             'status',
             'benefits',
             'category',
+            'category_write',
             'created_at',
             'updated_at',
         ]
         read_only_fields = ['coach', 'created_at', 'updated_at']
+
+    def to_internal_value(self, data):
+        # Support category as ID under 'category' or 'category_id'
+        if 'category' in data and not isinstance(data['category'], dict):
+            data = data.copy()
+            data['category_write'] = data.pop('category')
+        elif 'category_id' in data:
+            data = data.copy()
+            data['category_write'] = data.pop('category_id')
+        return super().to_internal_value(data)
         
         
         

@@ -1,8 +1,8 @@
 from datetime import datetime
 from rest_framework import serializers
 from Authentication.models import User
-from Provider.models import Service, CoachProfile
-from .models import ServiceBooking
+from Provider.models import Service, CoachProfile, Product
+from .models import ServiceBooking, ProviderWallet, WalletTransaction
 
 
 class UserSimpleSerializer(serializers.ModelSerializer):
@@ -65,9 +65,6 @@ class ServiceBookingCreateSerializer(serializers.Serializer):
     service_id = serializers.IntegerField()
     booking_date = serializers.DateField()
     booking_time = serializers.CharField()
-    # session_type = serializers.CharField(required=False, allow_blank=True)
-    # session_format = serializers.CharField(required=False, allow_blank=True)
-    # notes = serializers.CharField(required=False, allow_blank=True)
 
     def validate_service_id(self, value):
         try:
@@ -95,16 +92,12 @@ class ServiceBookingCreateSerializer(serializers.Serializer):
         user = self.context['request'].user
 
         booking_time = validated_data.pop('booking_time')
-        # session_type = validated_data.get('session_type') or service.service_type
-        # session_format = validated_data.get('session_format') or service.session_format
 
         booking = ServiceBooking.objects.create(
             user=user,
             coach=service.coach,
             service=service,
             booking_time=booking_time,
-            # session_type=session_type,
-            # session_format=session_format,
             amount=service.price,
             currency=service.currency,
             **validated_data
@@ -112,10 +105,18 @@ class ServiceBookingCreateSerializer(serializers.Serializer):
         return booking
 
 
+class ProductSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'title', 'description', 'price', 'Thumbnail']
+
+
 class ServiceBookingDetailSerializer(serializers.ModelSerializer):
     user = UserSimpleSerializer(read_only=True)
     coach = CoachBookingInfoSerializer(read_only=True)
     service = ServiceSimpleSerializer(read_only=True)
+    product = ProductSimpleSerializer(read_only=True)
+    order_type = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceBooking
@@ -124,10 +125,10 @@ class ServiceBookingDetailSerializer(serializers.ModelSerializer):
             'user',
             'coach',
             'service',
+            'product',
+            'order_type',
             'booking_date',
             'booking_time',
-            'session_type',
-            'session_format',
             'amount',
             'currency',
             'status',
@@ -138,3 +139,57 @@ class ServiceBookingDetailSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+    def get_order_type(self, obj):
+        if obj.product_id:
+            return 'product'
+        return 'service'
+
+
+class ProductPurchaseCreateSerializer(serializers.ModelSerializer):
+    product_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = ServiceBooking
+        fields = ['product_id',]
+
+    def validate_product_id(self, value):
+        try:
+            product = Product.objects.get(id=value)
+        except Product.DoesNotExist:
+            raise serializers.ValidationError("Product with given ID does not exist.")
+        if product.status != "published":
+            raise serializers.ValidationError("This product is not available for purchase.")
+        return value
+
+    def create(self, validated_data):
+        product_id = validated_data.pop('product_id')
+        product = Product.objects.get(id=product_id)
+        user = self.context['request'].user
+
+        booking = ServiceBooking.objects.create(
+            user=user,
+            coach=product.coach,
+            product=product,
+            amount=product.price,
+            currency='USD',
+            payment_status='pending',
+            status='pending',
+            **validated_data
+        )
+        return booking
+
+
+class ProviderWalletSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProviderWallet
+        fields = ['id', 'balance', 'created_at', 'updated_at']
+
+
+class WalletTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WalletTransaction
+        fields = ['id', 'transaction_type', 'amount', 'balance_after', 'description', 'booking', 'created_at']
+
+
+

@@ -5,6 +5,8 @@ from rest_framework import request, status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from Payments.models import ProviderWallet
+from Payments.serializers import ProviderWalletSerializer
 from utils.permissions import IsProviderUser
 from Administration.models import Category
 from Administration.serializers import CategorySerializer
@@ -352,7 +354,32 @@ class ServiceCreateView(APIView):
             status_code=status.HTTP_200_OK
         )
         
- 
+
+class ServiceListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        services = Service.objects.all().prefetch_related('benefits')
+        serializer = ServiceCreateSerializer(services, many=True, context={'request': request})
+        return APIResponse.success(
+            message="Services retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+class ProductsListView(APIView):
+    permission_classes = [IsAuthenticated,]
+
+    def get(self, request):
+        products = Product.objects.all()
+        serializer = ProductSerializer(products, many=True, context={'request': request})
+        return APIResponse.success(
+            message="Products retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
         
 class BlogCreateView(APIView):
     permission_classes = [IsAuthenticated, IsProviderUser]
@@ -484,5 +511,84 @@ class productListView(APIView):
         return APIResponse.success(
             message="Products retrieved successfully.",
             data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+class ProviderWalletView(APIView):
+    permission_classes = [IsAuthenticated, IsProviderUser]
+
+    def get(self, request):
+        """Retrieve the wallet details for the authenticated provider."""
+        from decimal import Decimal
+        import datetime
+        from django.db.models import Sum
+        from django.utils import timezone
+        from Payments.models import WalletTransaction
+
+        try:
+            wallet, _ = ProviderWallet.objects.get_or_create(user=request.user)
+        except Exception as e:
+            return APIResponse.error(
+                message=f"Error accessing wallet: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        today = timezone.localdate()
+        daily_earnings = []
+        this_week_total = Decimal('0.00')
+
+        # Generate last 7 days of daily earnings (inclusive of today)
+        for i in range(6, -1, -1):
+            date = today - datetime.timedelta(days=i)
+            day_name = date.strftime('%a') # 'Mon', 'Tue', etc.
+            
+            day_sum = WalletTransaction.objects.filter(
+                wallet=wallet,
+                transaction_type='credit',
+                created_at__date=date
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            
+            daily_earnings.append({
+                "day": day_name,
+                "amount": float(day_sum)
+            })
+            this_week_total += day_sum
+
+        # Calculate last week's earnings (from 14 days ago to 8 days ago)
+        start_last_week = today - datetime.timedelta(days=13)
+        end_last_week = today - datetime.timedelta(days=7)
+        last_week_total = WalletTransaction.objects.filter(
+            wallet=wallet,
+            transaction_type='credit',
+            created_at__date__range=[start_last_week, end_last_week]
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+        # Calculate percentage change
+        if last_week_total > 0:
+            change_pct = ((this_week_total - last_week_total) / last_week_total) * 100
+            if change_pct >= 0:
+                percentage_change = f"+{int(change_pct)}%"
+            else:
+                percentage_change = f"{int(change_pct)}%"
+        else:
+            if this_week_total > 0:
+                percentage_change = "+100%"
+            else:
+                percentage_change = "0%"
+
+        serializer = ProviderWalletSerializer(wallet, context={'request': request})
+        
+        response_data = {
+            # "wallet": serializer.data,
+            "this_week_earnings": float(this_week_total),
+            "weekly_earnings_percentage_change": percentage_change,
+            "daily_earnings": daily_earnings
+        }
+
+        return APIResponse.success(
+            message="Provider wallet retrieved successfully.",
+            data=response_data,
             status_code=status.HTTP_200_OK
         )
