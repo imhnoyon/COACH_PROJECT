@@ -3,6 +3,11 @@ from Administration.models import Category
 from Authentication.models import User
 
 class CoachProfile(models.Model):
+    STATUS=(
+        ("pending","Pending"),
+        ("approved","Approved"),
+        ("rejected","Rejected"),
+    )
     user = models.OneToOneField(User,on_delete=models.CASCADE,related_name="coach_profile")
     categories = models.ManyToManyField(Category,related_name="coaches")
     profile_photo = models.ImageField(upload_to="coach/profile/")
@@ -10,7 +15,7 @@ class CoachProfile(models.Model):
     about = models.TextField()
     expertises = models.JSONField(default=list, blank=True)
     is_completed = models.BooleanField(default=False)
-
+    status = models.CharField(max_length=20,choices=STATUS,default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

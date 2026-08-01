@@ -4,9 +4,9 @@ from .models import *
 
 @admin.register(CoachProfile)
 class ProviderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'about', 'user', 'get_categories', 'expertises', 'created_at', 'updated_at')
-    search_fields = ('about',)
-    list_filter = ('created_at', 'updated_at')
+    list_display = ('id', 'user', 'status', 'is_completed', 'get_categories','status', 'created_at', 'updated_at')
+    search_fields = ('user__email', 'user__full_name', 'about')
+    list_filter = ('status', 'is_completed', 'created_at', 'updated_at')
     ordering = ('-created_at',)
 
     def get_categories(self, obj):

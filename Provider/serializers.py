@@ -43,6 +43,7 @@ class CoachProfileDetailSerializer(serializers.ModelSerializer):
             'introduction_video',
             'expertises',
             'is_completed',
+            'status',
             'created_at',
             'updated_at',
         ]

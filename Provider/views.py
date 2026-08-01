@@ -1,7 +1,7 @@
 import json
 from django.db import transaction
 from django.db.migrations import serializer
-from rest_framework import status
+from rest_framework import request, status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -72,7 +72,7 @@ class CoachProfileView(APIView):
                     'profile_photo': serializer.validated_data['profile_photo'],
                     'introduction_video': serializer.validated_data.get('introduction_video'),
                     'expertises': serializer.validated_data.get('expertises', []),
-                    # 'is_completed': True,
+                    'is_completed': True,
                 }
             )
 
@@ -190,7 +190,7 @@ class CoachProfileListView(APIView):
         """Retrieve all incomplete coach/provider profiles (is_completed=False)."""
         profiles = CoachProfile.objects.select_related('user')\
             .prefetch_related('categories', 'certifications', 'qualifications')\
-            .filter(is_completed=False)
+            .filter(status='pending')
         serializer = CoachProfileDetailSerializer(profiles, many=True, context={'request': request})
         return APIResponse.success(
             message="Incomplete provider profiles retrieved successfully.",
@@ -199,23 +199,52 @@ class CoachProfileListView(APIView):
         )
 
     def patch(self, request, profile_id):
-        """Update an existing coach/provider profile (mark as completed)."""
+        """
+        Update coach profile status (approved/rejected)
+        or mark it as completed.
+        """
+
         try:
             profile = CoachProfile.objects.get(id=profile_id)
         except CoachProfile.DoesNotExist:
             return APIResponse.error(
-                message="Provider profile not found.",
+                message="Coach profile not found.",
                 status_code=status.HTTP_404_NOT_FOUND
             )
 
-        profile.is_completed = True
-        profile.save()
+        action = request.data.get("action")  # approved | rejected |
 
-        updated_profile = self.get_queryset(profile.user)
-        res_serializer = CoachProfileDetailSerializer(updated_profile, context={'request': request})
+        if action == "approved":
+            if profile.status != "pending":
+                return APIResponse.error(
+                    message="Only pending profiles can be approved.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            profile.status = "approved"
+            profile.save()
+            message = "Coach profile approved successfully."
+        elif action == "rejected":
+            if profile.status != "pending":
+                return APIResponse.error(
+                    message="Only pending profiles can be rejected.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            profile.status = "rejected"
+            profile.save()
+            message = "Coach profile rejected successfully."
+        else:
+            return APIResponse.error(
+                message="Invalid action. Use 'approved', 'rejected'",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        serializer = CoachProfileDetailSerializer(
+            profile,
+            context={"request": request}
+        )
         return APIResponse.success(
-            message="Provider profile marked as completed.",
-            data=res_serializer.data,
+            message=message,
+            data=serializer.data,
             status_code=status.HTTP_200_OK
         )
 

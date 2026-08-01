@@ -5,6 +5,7 @@ urlpatterns = [
     path('categories-list/', CategoryListView.as_view(), name='category-list'),
     path('coach-profile/', CoachProfileView.as_view(), name='coach-profile'),
     path('provider-list-profile/', CoachProfileListView.as_view(), name='provider-profile'),
+    path('provider-list-profile/<int:profile_id>/', CoachProfileListView.as_view(), name='provider-profile'),
     path('services/create/', ServiceCreateView.as_view(), name='service-create'),
     path('services/<int:service_id>/', ServiceCreateView.as_view(), name='service-detail'),
     path('retrive-services/<int:service_id>/', ServiceCreateView.as_view(), name='service-detail'),

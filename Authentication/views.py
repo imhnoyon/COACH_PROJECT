@@ -108,7 +108,17 @@ class SignInView(APIView):
                 message="Your account has been deactivated or banned. Please contact support at support@coach.com",
                 status_code=status.HTTP_403_FORBIDDEN
             )
-            
+
+        if user.role and user.role.lower() in ['provider', 'coach']:
+            from Provider.models import CoachProfile
+            coach_profile = CoachProfile.objects.filter(user=user).first()
+
+            if coach_profile and coach_profile.status == 'rejected':
+                return APIResponse.error(
+                    message="Your provider account has been rejected.",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+
         tokens = generate_tokens(user)
         return APIResponse.success(
             message="Login successful",
