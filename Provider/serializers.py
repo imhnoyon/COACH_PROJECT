@@ -157,3 +157,35 @@ class BlogSerializer(serializers.ModelSerializer):
             'name': obj.category.name,
             'description': obj.category.description,
         }
+        
+        
+        
+class ProductSerializer(serializers.ModelSerializer):
+    category_details = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            'id',
+            'coach',
+            'category',
+            'category_details',
+            'title',
+            'description',
+            'Thumbnail',
+            'book_file',
+            'price',
+            'status',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['coach', 'created_at', 'updated_at']
+
+    def get_category_details(self, obj):
+        if not obj.category:
+            return None
+        return {
+            'id': obj.category.id,
+            'name': obj.category.name,
+            'description': obj.category.description,
+        }

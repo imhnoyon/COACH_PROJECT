@@ -9,5 +9,8 @@ urlpatterns = [
     path('retrive-services/<int:service_id>/', ServiceCreateView.as_view(), name='service-detail'),
     path('blogs/create/', BlogCreateView.as_view(), name='blog-create'),
     path('blogs/<int:blog_id>/', BlogCreateView.as_view(), name='blog-detail'),
+    path('products/create/', ProductCreateView.as_view(), name='product-create'),
+    path('products-list/', productListView.as_view(), name='product-list'),
+    path('products/<int:product_id>/', ProductCreateView.as_view(), name='product-detail'),
 
 ]

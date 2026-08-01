@@ -338,3 +338,87 @@ class BlogCreateView(APIView):
             data=res_serializer.data,
             status_code=status.HTTP_200_OK
         )
+        
+        
+        
+class ProductCreateView(APIView):
+    permission_classes = [IsAuthenticated, IsProviderUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request):
+        serializer = ProductSerializer(data=request.data)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation error",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        product = serializer.save(coach=request.user)
+
+        res_serializer = ProductSerializer(product, context={'request': request})
+        return APIResponse.success(
+            message="Product created successfully.",
+            data=res_serializer.data,
+            status_code=status.HTTP_201_CREATED
+        )
+        
+    def patch(self, request, product_id):
+        """Update an existing product."""
+        try:
+            product = Product.objects.get(id=product_id, coach=request.user)
+        except Product.DoesNotExist:
+            return APIResponse.error(
+                message="Product not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ProductSerializer(product, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation error",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer.save()
+
+        res_serializer = ProductSerializer(product, context={'request': request})
+        return APIResponse.success(
+            message="Product updated successfully.",
+            data=res_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+    def get(self, request, product_id):
+        """Retrieve a specific product by ID."""
+        try:
+            product = Product.objects.get(id=product_id, coach=request.user)
+        except Product.DoesNotExist:
+            return APIResponse.error(
+                message="Product not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ProductSerializer(product, context={'request': request})
+        return APIResponse.success(
+            message="Product retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+class productListView(APIView):
+    permission_classes = [IsAuthenticated, IsProviderUser]
+
+    def get(self, request):
+        """Retrieve all products for the authenticated coach."""
+        products = Product.objects.filter(coach=request.user)
+        serializer = ProductSerializer(products, many=True, context={'request': request})
+        return APIResponse.success(
+            message="Products retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
