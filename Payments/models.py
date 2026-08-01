@@ -23,8 +23,6 @@ class ServiceBooking(models.Model):
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="bookings")
     booking_date = models.DateField()
     booking_time = models.TimeField()
-    session_type = models.CharField(max_length=50, blank=True, null=True)
-    session_format = models.CharField(max_length=50, blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=10, default="USD")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
