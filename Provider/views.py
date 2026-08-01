@@ -1,8 +1,9 @@
 import json
 from django.db import transaction
+from django.db.migrations import serializer
 from rest_framework import status
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from utils.permissions import IsProviderUser
 from Administration.models import Category
@@ -29,14 +30,12 @@ class CoachProfileView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self, user):
-        """Fetch coach profile with prefetching to avoid N+1 query problem."""
         return CoachProfile.objects.filter(user=user)\
             .select_related('user')\
             .prefetch_related('categories', 'certifications', 'qualifications')\
             .first()
 
     def get(self, request):
-        """Retrieve current authenticated coach profile."""
         profile = self.get_queryset(request.user)
         if not profile:
             return APIResponse.error(
@@ -73,7 +72,7 @@ class CoachProfileView(APIView):
                     'profile_photo': serializer.validated_data['profile_photo'],
                     'introduction_video': serializer.validated_data.get('introduction_video'),
                     'expertises': serializer.validated_data.get('expertises', []),
-                    'is_completed': True,
+                    # 'is_completed': True,
                 }
             )
 
@@ -183,6 +182,42 @@ class CoachProfileView(APIView):
             for name, doc in zip(names, docs):
                 Qualification.objects.create(coach=profile, name=name, document=doc)
 
+class CoachProfileListView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get(self, request):
+        """Retrieve all incomplete coach/provider profiles (is_completed=False)."""
+        profiles = CoachProfile.objects.select_related('user')\
+            .prefetch_related('categories', 'certifications', 'qualifications')\
+            .filter(is_completed=False)
+        serializer = CoachProfileDetailSerializer(profiles, many=True, context={'request': request})
+        return APIResponse.success(
+            message="Incomplete provider profiles retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+    def patch(self, request, profile_id):
+        """Update an existing coach/provider profile (mark as completed)."""
+        try:
+            profile = CoachProfile.objects.get(id=profile_id)
+        except CoachProfile.DoesNotExist:
+            return APIResponse.error(
+                message="Provider profile not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        profile.is_completed = True
+        profile.save()
+
+        updated_profile = self.get_queryset(profile.user)
+        res_serializer = CoachProfileDetailSerializer(updated_profile, context={'request': request})
+        return APIResponse.success(
+            message="Provider profile marked as completed.",
+            data=res_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
 
 
 class ServiceCreateView(APIView):
@@ -288,7 +323,7 @@ class ServiceCreateView(APIView):
             status_code=status.HTTP_200_OK
         )
         
-        
+ 
         
 class BlogCreateView(APIView):
     permission_classes = [IsAuthenticated, IsProviderUser]
