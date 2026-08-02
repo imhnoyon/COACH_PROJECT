@@ -183,3 +183,32 @@ class PaymentsTests(APITestCase):
         response = self.client.post(url, data=b"{}", content_type="application/json", **headers)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['message'], "Event already processed.")
+
+    def test_overlapping_booking_validation(self):
+        self.client.force_authenticate(user=self.customer)
+        url = reverse('book-service')
+        
+        # Try to book the same date and same time slot (overlapping with self.booking)
+        data = {
+            'service_id': self.service.id,
+            'booking_date': '2026-08-10',
+            'booking_time': '11:00 AM'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        # Should fail with validation error (400 Bad Request)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data['success'])
+
+        # Try to book a different time slot on the same date
+        different_time_data = {
+            'service_id': self.service.id,
+            'booking_date': '2026-08-10',
+            'booking_time': '02:00 PM'
+        }
+        
+        response = self.client.post(url, different_time_data, format='json')
+        # Should succeed (201 Created)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['success'])
+

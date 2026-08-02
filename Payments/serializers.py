@@ -86,6 +86,28 @@ class ServiceBookingCreateSerializer(serializers.Serializer):
                 continue
         raise serializers.ValidationError("Invalid time format. Example formats: '11:00 AM' or '11:00:00'.")
 
+    def validate(self, attrs):
+        service_id = attrs.get('service_id')
+        booking_date = attrs.get('booking_date')
+        booking_time = attrs.get('booking_time')
+
+        try:
+            service = Service.objects.get(id=service_id)
+        except Service.DoesNotExist:
+            raise serializers.ValidationError({"service_id": "Service with given ID does not exist."})
+
+        # Check if the coach already has an active booking at the same date and time
+        exists = ServiceBooking.objects.filter(
+            coach=service.coach,
+            booking_date=booking_date,
+            booking_time=booking_time
+        ).exclude(status='cancelled').exclude(payment_status='failed').exists()
+
+        if exists:
+            raise serializers.ValidationError("This time slot is already booked. Please choose a different date or time.")
+
+        return attrs
+
     def create(self, validated_data):
         service_id = validated_data.pop('service_id')
         service = Service.objects.get(id=service_id)
@@ -117,6 +139,7 @@ class ServiceBookingDetailSerializer(serializers.ModelSerializer):
     service = ServiceSimpleSerializer(read_only=True)
     product = ProductSimpleSerializer(read_only=True)
     order_type = serializers.SerializerMethodField()
+    booking_time = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceBooking
@@ -144,6 +167,17 @@ class ServiceBookingDetailSerializer(serializers.ModelSerializer):
         if obj.product_id:
             return 'product'
         return 'service'
+
+    def get_booking_time(self, obj):
+        if not obj.booking_time:
+            return None
+        if isinstance(obj.booking_time, str):
+            try:
+                parsed_time = datetime.strptime(obj.booking_time, '%H:%M:%S').time()
+                return parsed_time.strftime('%I:%M %p')
+            except ValueError:
+                return obj.booking_time
+        return obj.booking_time.strftime('%I:%M %p')
 
 
 class ProductPurchaseCreateSerializer(serializers.ModelSerializer):
