@@ -247,3 +247,6 @@ class ServiceBookingPendingSerializer(serializers.ModelSerializer):
             'price': obj.service.price,
             'currency': obj.service.currency,
         }
+        
+        
+        

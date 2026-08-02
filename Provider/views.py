@@ -633,3 +633,34 @@ class ServiceBookingPendingAPIView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+        
+        
+        
+        
+class markAsCompletedAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, booking_id):
+        try:
+            booking = ServiceBooking.objects.get(id=booking_id, coach=request.user)
+        except ServiceBooking.DoesNotExist:
+            return APIResponse.error(
+                message="Service booking not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        if booking.status != "confirmed":
+            return APIResponse.error(
+                message="Only confirmed bookings can be marked as completed.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking.status = "completed"
+        booking.save()
+
+        serializer = ServiceBookingPendingSerializer(booking, context={"request": request})
+        return APIResponse.success(
+            message="Service booking marked as completed successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
