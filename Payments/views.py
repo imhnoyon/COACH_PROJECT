@@ -273,9 +273,18 @@ class StripeWebhookView(APIView):
                         if booking.payment_status == 'paid':
                             return APIResponse.success(message="Order already paid.")
 
+                        
                         booking.payment_status = 'paid'
                         booking.transaction_id = payment_intent_id
                         booking.payment_method = 'stripe'
+
+                        # Set status based on booking type for services only
+                        if booking.service:
+                            if booking.service.booking_type == 'instant':
+                                booking.status = 'confirmed'
+                            elif booking.service.booking_type == 'approval':
+                                booking.status = 'pending'
+
                         booking.save()
 
                         coach = booking.coach

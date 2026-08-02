@@ -18,8 +18,8 @@ urlpatterns = [
     #services list for provider
     path('services-list/', ServiceListView.as_view(), name='service-list'),
     path('user-products-list/', ProductsListView.as_view(), name='product-list'),
-    
-    
+    path('services-bookings-list/', ServiceBookingPendingAPIView.as_view(), name='service-booking-list'),
+
     # Payment related endpoints
     path('provider-wallet/', ProviderWalletView.as_view(), name='provider-wallet'),
 

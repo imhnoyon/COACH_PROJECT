@@ -5,7 +5,7 @@ from rest_framework import request, status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from Payments.models import ProviderWallet
+from Payments.models import ProviderWallet, ServiceBooking
 from Payments.serializers import ProviderWalletSerializer
 from utils.permissions import IsProviderUser
 from Administration.models import Category
@@ -590,5 +590,46 @@ class ProviderWalletView(APIView):
         return APIResponse.success(
             message="Provider wallet retrieved successfully.",
             data=response_data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+class ServiceBookingPendingAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        booking_status = request.query_params.get("status")
+
+        if booking_status == "pending":
+            bookings = ServiceBooking.objects.filter(
+                coach=request.user,
+                service__isnull=False,
+                payment_status="paid",
+                status="pending"
+            )
+        elif booking_status == "confirmed":
+            bookings = ServiceBooking.objects.filter(
+                coach=request.user,
+                service__isnull=False,
+                payment_status="paid",
+                status="confirmed"
+            )
+        else:
+            return APIResponse.error(
+                message="Invalid status. Use 'pending' or 'confirmed'.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        bookings = bookings.select_related("user", "service").order_by("-id")
+
+        serializer = ServiceBookingPendingSerializer(
+            bookings,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message=f"{booking_status.title()} service bookings retrieved successfully.",
+            data=serializer.data,
             status_code=status.HTTP_200_OK
         )

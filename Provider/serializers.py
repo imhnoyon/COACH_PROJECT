@@ -3,6 +3,7 @@ from rest_framework import serializers
 from Administration.models import Category
 from Administration.serializers import CategorySerializer
 from Authentication.models import User
+from Payments.models import ServiceBooking
 from .models import *
 
 
@@ -203,4 +204,46 @@ class ProductSerializer(serializers.ModelSerializer):
             'id': obj.category.id,
             'name': obj.category.name,
             'description': obj.category.description,
+        }
+        
+        
+        
+        
+class ServiceBookingPendingSerializer(serializers.ModelSerializer):
+    user = UserSimpleSerializer(read_only=True)
+    service = serializers.SerializerMethodField()
+    booking_type = serializers.CharField(source='service.booking_type', read_only=True)
+    session_url = serializers.URLField(source='service.session_url', read_only=True)
+    session_duration = serializers.CharField(source='service.session_duration', read_only=True)
+    service_id = serializers.IntegerField(source='service.id', read_only=True)
+
+    class Meta:
+        model = ServiceBooking
+        fields = [
+            'id',
+            'service_id',
+            'user',
+            'service',
+            'booking_date',
+            'booking_time',
+            'amount',
+            'booking_type',
+            'session_url',
+            'session_duration',
+            'currency',
+            'status',
+            'payment_status',
+            'notes',
+            'created_at',
+        ]
+
+    def get_service(self, obj):
+        if not obj.service:
+            return None
+        return {
+            'id': obj.service.id,
+            'title': obj.service.title,
+            'session_duration': obj.service.session_duration,
+            'price': obj.service.price,
+            'currency': obj.service.currency,
         }
