@@ -705,30 +705,3 @@ class markAsConfirmedAPIView(APIView):
         
         
         
-class markAsRejectedAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def patch(self, request, booking_id):
-        try:
-            booking = ServiceBooking.objects.get(id=booking_id, coach=request.user)
-        except ServiceBooking.DoesNotExist:
-            return APIResponse.error(
-                message="Service booking not found.",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-
-        if booking.status != "pending":
-            return APIResponse.error(
-                message="Only pending bookings can be marked as rejected.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-
-        booking.status = "cancelled"
-        booking.save()
-
-        serializer = ServiceBookingPendingSerializer(booking, context={"request": request})
-        return APIResponse.success(
-            message="Service booking marked as cancelled successfully.",
-            data=serializer.data,
-            status_code=status.HTTP_200_OK
-        )

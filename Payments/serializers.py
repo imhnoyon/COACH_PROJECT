@@ -143,24 +143,8 @@ class ServiceBookingDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ServiceBooking
-        fields = [
-            'id',
-            'user',
-            'coach',
-            'service',
-            'product',
-            'order_type',
-            'booking_date',
-            'booking_time',
-            'amount',
-            'currency',
-            'status',
-            'payment_status',
-            'payment_method',
-            'transaction_id',
-            'notes',
-            'created_at',
-            'updated_at',
+        fields = [ 'id','user','coach','service','product','order_type','booking_date','booking_time',
+        'amount','currency','status','payment_status','payment_method','transaction_id','notes','created_at','updated_at',
         ]
 
     def get_order_type(self, obj):

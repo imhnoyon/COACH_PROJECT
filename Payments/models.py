@@ -9,6 +9,7 @@ class ServiceBooking(models.Model):
         ("confirmed", "Confirmed"),
         ("completed", "Completed"),
         ("cancelled", "Cancelled"),
+        ("rejected", "Rejected"),
     )
 
     PAYMENT_STATUS_CHOICES = (
@@ -30,6 +31,9 @@ class ServiceBooking(models.Model):
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="pending")
     payment_method = models.CharField(max_length=50, blank=True, null=True)
     transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    refund_status = models.CharField(max_length=20, blank=True, null=True)
+    refund_id = models.CharField(max_length=255, blank=True, null=True)
+    refunded_at = models.DateTimeField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -70,6 +74,9 @@ class PaymentTransaction(models.Model):
     coach = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_payments")
     booking = models.ForeignKey(ServiceBooking, on_delete=models.CASCADE, related_name="payment_transactions", null=True, blank=True)
     stripe_payment_intent_id = models.CharField(max_length=255, unique=True)
+    stripe_charge_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_transfer_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_application_fee_id = models.CharField(max_length=255, blank=True, null=True)
     gross_amount = models.DecimalField(max_digits=12, decimal_places=2)
     platform_fee = models.DecimalField(max_digits=12, decimal_places=2)
     provider_amount = models.DecimalField(max_digits=12, decimal_places=2)

@@ -1,4 +1,5 @@
 import os
+import logging
 from decimal import Decimal
 import stripe
 from django.conf import settings
@@ -12,6 +13,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from utils.api_response import APIResponse
 from Provider.models import Product
+
+logger = logging.getLogger(__name__)
+
 
 
 
@@ -379,4 +383,102 @@ class ProductOrdersListView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+
+
+class BookingRejectView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request, booking_id):
+        try:
+            with transaction.atomic():
+                try:
+                    booking = ServiceBooking.objects.select_for_update().get(id=booking_id)
+                except ServiceBooking.DoesNotExist:
+                    return APIResponse.error(
+                        message="Service booking not found.",
+                        status_code=status.HTTP_404_NOT_FOUND
+                    )
+
+                # Ensure the booking belongs to the logged-in coach
+                if booking.coach != request.user:
+                    return APIResponse.error(
+                        message="You are not authorized to reject this booking.",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+
+                # Ensure it is a service booking, not a product purchase
+                if booking.product_id is not None:
+                    return APIResponse.error(
+                        message="Only service bookings can be rejected.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Verify that the booking is still pending (status must be 'pending')
+                if booking.status != "pending":
+                    return APIResponse.error(
+                        message="Only pending bookings can be rejected.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Verify that the payment status is "paid"
+                if booking.payment_status != "paid":
+                    return APIResponse.error(
+                        message="Booking payment must be completed before rejection.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Ensure the booking has not already been refunded / prevent duplicate refunds
+                if booking.payment_status == "refunded" or booking.refund_status == "completed" or booking.refund_id:
+                    return APIResponse.error(
+                        message="This booking has already been refunded.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                from Payments.stripe_refund import StripeRefundService
+                StripeRefundService.refund_booking(booking)
+
+            # If atomic block completes without error, database is saved.
+            res_serializer = ServiceBookingDetailSerializer(booking, context={"request": request})
+            return APIResponse.success(
+                message="Booking successfully rejected and customer fully refunded.",
+                data=res_serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+
+        except stripe.error.InvalidRequestError as e:
+            logger.error(f"Stripe InvalidRequestError: {str(e)}")
+            return APIResponse.error(
+                message=f"Refund failed: Invalid request: {str(e)}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except stripe.error.CardError as e:
+            logger.error(f"Stripe CardError: {str(e)}")
+            return APIResponse.error(
+                message=f"Refund failed: Card declined: {e.user_message or str(e)}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except stripe.error.APIConnectionError as e:
+            logger.error(f"Stripe APIConnectionError: {str(e)}")
+            return APIResponse.error(
+                message="Refund failed: Stripe network connectivity issue.",
+                status_code=status.HTTP_502_BAD_GATEWAY
+            )
+        except stripe.error.RateLimitError as e:
+            logger.error(f"Stripe RateLimitError: {str(e)}")
+            return APIResponse.error(
+                message="Refund failed: Stripe rate limit exceeded.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        except stripe.error.StripeError as e:
+            logger.error(f"StripeError during rejection of booking {booking_id}: {str(e)}")
+            return APIResponse.error(
+                message=f"Stripe refund failed: {e.user_message or str(e)}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during rejection of booking {booking_id}: {str(e)}")
+            return APIResponse.error(
+                message=f"An unexpected error occurred: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 

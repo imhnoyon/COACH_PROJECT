@@ -1,8 +1,11 @@
 from django.urls import path
 from .views import *
+from Payments.views import BookingRejectView
 
 urlpatterns = [
     path('categories-list/', CategoryListView.as_view(), name='category-list'),
+
+
     path('coach-profile/', CoachProfileView.as_view(), name='coach-profile'),
     path('provider-list-profile/', CoachProfileListView.as_view(), name='provider-profile'),
     path('provider-list-profile/<int:profile_id>/', CoachProfileListView.as_view(), name='provider-profile'),
@@ -20,7 +23,8 @@ urlpatterns = [
     path('user-products-list/', ProductsListView.as_view(), name='product-list'),
     path('services-bookings-list/', ServiceBookingPendingAPIView.as_view(), name='service-booking-list'),
     path('service-accept/<int:booking_id>/', markAsConfirmedAPIView.as_view(), name='service-booking-accept'),
-    path('service-reject/<int:booking_id>/', markAsRejectedAPIView.as_view(), name='service-booking-reject'),
+    # path('service-reject/<int:booking_id>/', BookingRejectView.as_view(), name='service-booking-reject'),
+
     
 
     # Payment related endpoints
