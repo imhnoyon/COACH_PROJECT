@@ -614,9 +614,17 @@ class ServiceBookingPendingAPIView(APIView):
                 payment_status="paid",
                 status="confirmed"
             )
+            
+        elif booking_status =="completed":
+            bookings = ServiceBooking.objects.filter(
+                coach=request.user,
+                service__isnull=False,
+                payment_status="paid",
+                status="completed"
+            )
         else:
             return APIResponse.error(
-                message="Invalid status. Use 'pending' or 'confirmed'.",
+                message="Invalid status. Use 'pending', 'confirmed', or 'completed'.",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
@@ -661,6 +669,66 @@ class markAsCompletedAPIView(APIView):
         serializer = ServiceBookingPendingSerializer(booking, context={"request": request})
         return APIResponse.success(
             message="Service booking marked as completed successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+class markAsConfirmedAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, booking_id):
+        try:
+            booking = ServiceBooking.objects.get(id=booking_id, coach=request.user)
+        except ServiceBooking.DoesNotExist:
+            return APIResponse.error(
+                message="Service booking not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        if booking.status != "pending":
+            return APIResponse.error(
+                message="Only pending bookings can be marked as confirmed.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking.status = "confirmed"
+        booking.save()
+
+        serializer = ServiceBookingPendingSerializer(booking, context={"request": request})
+        return APIResponse.success(
+            message="Service booking marked as confirmed successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+class markAsRejectedAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, booking_id):
+        try:
+            booking = ServiceBooking.objects.get(id=booking_id, coach=request.user)
+        except ServiceBooking.DoesNotExist:
+            return APIResponse.error(
+                message="Service booking not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        if booking.status != "pending":
+            return APIResponse.error(
+                message="Only pending bookings can be marked as rejected.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking.status = "cancelled"
+        booking.save()
+
+        serializer = ServiceBookingPendingSerializer(booking, context={"request": request})
+        return APIResponse.success(
+            message="Service booking marked as cancelled successfully.",
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
