@@ -1,0 +1,7 @@
+stripe listen --forward-to http://127.0.0.1:8000/api/v1/payments/webhook/
+
+#celery run
+celery -A COACH_PROJECT worker -l info --pool=solo
+
+# Celery beat run command
+celery -A COACH_PROJECT beat -l info
