@@ -13,6 +13,8 @@ urlpatterns = [
     path('blog-list/', BlogListView.as_view(), name='blog-list'),
     path('blog-detail/<int:blog_id>/', BlogDetailView.as_view(), name='blog-detail'),
     path('digital-product-list/', DigitalProductListView.as_view(), name='digital-product-list'),
+    path('digital-product-detail/<int:product_id>/', DigitalProductDetailsView.as_view(), name='digital-product-detail'),
     path('user-service-list/', UserServiceListView.as_view(), name='user-service-list'),
+    path('user-service-detail/<int:service_id>/', UserServiceDetailView.as_view(), name='user-service-detail'),
 
 ]

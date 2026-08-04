@@ -580,6 +580,116 @@ class DigitalProductListTests(APITestCase):
         self.assertEqual(coach_details['about'], "Expert UI/UX Designer")
 
 
+class CoachProfileDetailTests(APITestCase):
+
+    def setUp(self):
+        # Create category
+        self.category = Category.objects.create(name="Business", description="Business coaching")
+        
+        # Create user / customer
+        self.customer = User.objects.create_user(
+            email="customer_cp@example.com",
+            password="password123",
+            full_name="John Customer",
+            role="User"
+        )
+        
+        # Create coach / provider user
+        self.provider_user = User.objects.create_user(
+            email="provider_cp@example.com",
+            password="password123",
+            full_name="Sarah Chen",
+            role="Provider"
+        )
+        
+        # Create Coach Profile
+        self.coach_profile = CoachProfile.objects.create(
+            user=self.provider_user,
+            about="Expert UI/UX Designer",
+            is_completed=True,
+            status="approved"
+        )
+        
+        # Associate category to profile
+        self.coach_profile.categories.add(self.category)
+
+        # Create published service for the coach
+        self.service = Service.objects.create(
+            coach=self.provider_user,
+            category=self.category,
+            title="UI/UX Mentorship",
+            description="1 on 1 guidance.",
+            service_type="one_time",
+            session_format="video",
+            session_duration=60,
+            price=Decimal("150.00"),
+            status="published"
+        )
+
+        # Create published blog for the coach
+        self.blog = Blog.objects.create(
+            coach=self.provider_user,
+            category=self.category,
+            title="How to Build Confidence as a First-Time Entrepreneur",
+            content="Confidence is key...",
+            status="published"
+        )
+
+        # Create reviews/ratings for the coach
+        self.rating_user = User.objects.create_user(
+            email="rater@example.com",
+            password="password123",
+            full_name="Courtney Henry",
+            role="User"
+        )
+        
+        self.rating = CoachRating.objects.create(
+            coach=self.coach_profile,
+            user=self.rating_user,
+            rating=5,
+            review="Great atmosphere, friendly staff, and excellent service."
+        )
+
+        self.url = reverse('coach-profile-detail', kwargs={'coach_id': self.coach_profile.id})
+
+    def test_coach_profile_detail_returns_additional_info(self):
+        self.client.force_authenticate(user=self.customer)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        
+        profile_data = response.data['data']
+        self.assertEqual(profile_data['id'], self.coach_profile.id)
+        self.assertEqual(profile_data['about'], "Expert UI/UX Designer")
+        
+        # Verify nested services
+        services = profile_data['services']
+        self.assertEqual(len(services), 1)
+        self.assertEqual(services[0]['title'], "UI/UX Mentorship")
+        
+        # Verify nested blogs
+        blogs = profile_data['blogs']
+        self.assertEqual(len(blogs), 1)
+        self.assertEqual(blogs[0]['title'], "How to Build Confidence as a First-Time Entrepreneur")
+        
+        # Verify nested reviews
+        reviews = profile_data['reviews']
+        self.assertEqual(len(reviews), 1)
+        self.assertEqual(reviews[0]['user_name'], "Courtney Henry")
+        self.assertEqual(reviews[0]['rating'], 5)
+        self.assertEqual(reviews[0]['review'], "Great atmosphere, friendly staff, and excellent service.")
+        
+        # Verify rating breakdown
+        breakdown = profile_data['rating_breakdown']
+        self.assertEqual(breakdown['5'], 1)
+        self.assertEqual(breakdown['4'], 0)
+        self.assertEqual(breakdown['3'], 0)
+        self.assertEqual(breakdown['2'], 0)
+        self.assertEqual(breakdown['1'], 0)
+
+
+
 
 
 

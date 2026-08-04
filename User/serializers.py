@@ -142,6 +142,23 @@ class UserServiceSerializer(serializers.ModelSerializer):
         return [benefit.outcome for benefit in obj.benefits.all()]
 
 
+class CoachReviewSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+    user_image = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = CoachRating
+        fields = ["id", "user_name", "user_image", "rating", "review", "created_at"]
+
+    def get_user_image(self, obj):
+        if obj.user.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.user.image.url)
+            return obj.user.image.url
+        return None
+
+
 class CoachProfileDetailSerializer(serializers.ModelSerializer):
     user = UserSimpleSerializer(read_only=True)
     categories = serializers.StringRelatedField(many=True, read_only=True)
@@ -149,6 +166,9 @@ class CoachProfileDetailSerializer(serializers.ModelSerializer):
     qualifications = QualificationSerializer(many=True, read_only=True)
     avg_rating = serializers.FloatField(read_only=True, default=0.0)
     services = serializers.SerializerMethodField(read_only=True)
+    blogs = serializers.SerializerMethodField(read_only=True)
+    reviews = serializers.SerializerMethodField(read_only=True)
+    rating_breakdown = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = CoachProfile
@@ -164,16 +184,37 @@ class CoachProfileDetailSerializer(serializers.ModelSerializer):
             "categories",
             "certifications",
             "qualifications",
-            "avg_rating",
             "services",
+            "blogs",
+            "avg_rating",
+            "reviews",
+            "rating_breakdown",
             "created_at",
             "updated_at",
         ]
 
     def get_services(self, obj):
-        # Retrieve all published services for the coach (matching user account)
         services = Service.objects.filter(coach=obj.user, status="published")
-        return UserServiceSerializer(services, many=True).data
+        return UserServiceSerializer(services, many=True, context=self.context).data
+
+    def get_blogs(self, obj):
+        blogs = Blog.objects.filter(coach=obj.user, status="published")
+        return UserBlogSerializer(blogs, many=True, context=self.context).data
+
+    def get_reviews(self, obj):
+        ratings = CoachRating.objects.filter(coach=obj).order_by("-created_at")
+        return CoachReviewSerializer(ratings, many=True, context=self.context).data
+
+    def get_rating_breakdown(self, obj):
+        ratings = CoachRating.objects.filter(coach=obj)
+        breakdown = {
+            "5": ratings.filter(rating=5).count(),
+            "4": ratings.filter(rating=4).count(),
+            "3": ratings.filter(rating=3).count(),
+            "2": ratings.filter(rating=2).count(),
+            "1": ratings.filter(rating=1).count(),
+        }
+        return breakdown
     
     
     
@@ -275,6 +316,45 @@ class DigitalProductSerializer(serializers.ModelSerializer):
             'description': obj.category.description,
         }
         
+        
+class DigitalProductDetailsSerializer(serializers.ModelSerializer):
+    category_details = serializers.SerializerMethodField(read_only=True)
+    coach = BlogCoachSerializer(read_only=True)
+    other_products = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            'id',
+            'coach',
+            'category',
+            'category_details',
+            'title',
+            'description',
+            'Thumbnail',
+            'book_file',
+            'price',
+            'status',
+            'other_products',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['coach', 'created_at', 'updated_at']
+
+    def get_category_details(self, obj):
+        if not obj.category:
+            return None
+        return {
+            'id': obj.category.id,
+            'name': obj.category.name,
+            'description': obj.category.description,
+        }
+
+    def get_other_products(self, obj):
+        request = self.context.get('request')
+        other_products = Product.objects.filter(coach=obj.coach, status="published").exclude(id=obj.id)
+        return DigitalProductSerializer(other_products, many=True, context={'request': request}).data
+        
 
 
 
@@ -320,3 +400,56 @@ class userServiceCreateSerializer(serializers.ModelSerializer):
             'description': obj.category.description,
         }
 
+class userServiceDetailsSerializer(serializers.ModelSerializer):
+    category = serializers.SerializerMethodField(read_only=True)
+    # coach = BlogCoachSerializer(read_only=True)
+    provider_details = BlogCoachSerializer(source='coach', read_only=True)
+    coach_id = serializers.IntegerField(source='coach.id', read_only=True)
+    benefits = serializers.SerializerMethodField(read_only=True)
+    other_sessions = serializers.SerializerMethodField(read_only=True)
+   
+    
+    class Meta:
+        model = Service
+        fields = [
+            'id',
+            'coach_id',
+            # 'coach',
+            'provider_details',
+            'title',
+            'description',
+            'service_type',
+            'session_format',
+            'session_duration',
+            'currency',
+            'price',
+            'booking_type',
+            'who_is_this_service_for',
+            'preparation_instructions',
+            'cancellation_policy',
+            'session_url',
+            'status',
+            'category',
+            'benefits',
+            'other_sessions',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['coach', 'created_at', 'updated_at']
+        
+    def get_category(self, obj):
+        if not obj.category:
+            return None
+        return {
+            'id': obj.category.id,
+            'name': obj.category.name,
+            'description': obj.category.description,
+        }
+
+    def get_benefits(self, obj):
+        return [benefit.outcome for benefit in obj.benefits.all()]
+
+    def get_other_sessions(self, obj):
+        request = self.context.get('request')
+        other_services = Service.objects.filter(coach=obj.coach, status="published").exclude(id=obj.id)
+        return userServiceCreateSerializer(other_services, many=True, context={'request': request}).data

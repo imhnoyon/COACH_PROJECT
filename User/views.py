@@ -169,7 +169,6 @@ class CoachProfileDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, coach_id):
-        # We fetch the coach profile by coach_id (which is its pk) and annotate avg_rating
         coach_profile = CoachProfile.objects.filter(id=coach_id, status="approved")\
             .annotate(avg_rating=Coalesce(Avg('coach_ratings__rating'), 0.0))\
             .select_related('user')\
@@ -267,6 +266,26 @@ class DigitalProductListView(APIView):
         )
         
         
+class DigitalProductDetailsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, product_id):
+        try:
+            product = Product.objects.select_related('category', 'coach', 'coach__coach_profile').get(id=product_id, status="published")
+        except Product.DoesNotExist:
+            return APIResponse.error(
+                message="Product not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = DigitalProductDetailsSerializer(product, context={'request': request})
+        return APIResponse.success(
+            message="Digital product details retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
 class UserServiceListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -275,6 +294,27 @@ class UserServiceListView(APIView):
         serializer = userServiceCreateSerializer(services, many=True, context={'request': request})
         return APIResponse.success(
             message="Services retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+class UserServiceDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, service_id):
+        try:
+            service = Service.objects.select_related('coach', 'coach__coach_profile').prefetch_related('benefits').get(id=service_id, status="published")
+        except Service.DoesNotExist:
+            return APIResponse.error(
+                message="Service not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = userServiceDetailsSerializer(service, context={'request': request})
+        return APIResponse.success(
+            message="Service details retrieved successfully.",
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )

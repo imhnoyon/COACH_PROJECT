@@ -1,0 +1,4 @@
+STDOUT: 
+STDERR: Updated 1 path from the index
+
+CODE: 0
