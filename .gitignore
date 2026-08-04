@@ -154,3 +154,14 @@ cython_debug/
 .env.production
 .env.development
 .env.staging
+
+
+# ===========================
+# Celery
+# ===========================
+celerybeat-schedule*
+celerybeat-schedule
+celerybeat-schedule-shm
+celerybeat-schedule-wal
+*.pid
+ 
