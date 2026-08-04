@@ -216,11 +216,13 @@ class ServiceBookingPendingSerializer(serializers.ModelSerializer):
     session_url = serializers.URLField(source='service.session_url', read_only=True)
     session_duration = serializers.CharField(source='service.session_duration', read_only=True)
     service_id = serializers.IntegerField(source='service.id', read_only=True)
+    coach_id = serializers.IntegerField(source='coach.coach_profile.id', read_only=True)
 
     class Meta:
         model = ServiceBooking
         fields = [
             'id',
+            'coach_id',
             'service_id',
             'user',
             'service',

@@ -42,3 +42,11 @@ class ServiceAdmin(admin.ModelAdmin):
 class ClientBenefitAdmin(admin.ModelAdmin):
     list_display = ('id', 'service', 'outcome')
     search_fields = ('outcome',)
+
+
+@admin.register(Blog)
+class BlogAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'category', 'coach', 'created_at', 'updated_at')
+    search_fields = ('title',)
+    list_filter = ('category', 'coach', 'created_at', 'updated_at')
+    ordering = ('-created_at',)

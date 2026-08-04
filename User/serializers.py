@@ -1,9 +1,9 @@
 from rest_framework import serializers
 from Authentication.models import User
 from Administration.models import Category
-from Provider.models import CoachProfile
-from .models import Post
-
+from Provider.models import CoachProfile, Service, Blog
+from Provider.serializers import CertificationSerializer, QualificationSerializer
+from .models import *
 
 class PostCreateSerializer(serializers.ModelSerializer):
     category = serializers.CharField(source="category.name", read_only=True)
@@ -59,6 +59,8 @@ class UserSimpleSerializer(serializers.ModelSerializer):
 class CoachProfileSerializer(serializers.ModelSerializer):
     user = UserSimpleSerializer(read_only=True)
     categories = serializers.StringRelatedField(many=True, read_only=True)
+    avg_rating = serializers.FloatField(read_only=True, default=0.0)
+    completed_sessions_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = CoachProfile
@@ -67,3 +69,160 @@ class CoachProfileSerializer(serializers.ModelSerializer):
         
         
 
+
+
+
+class CoachRatingSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+    coach_name = serializers.CharField(source="coach.full_name", read_only=True)
+
+    class Meta:
+        model = CoachRating
+        fields = [ "id","coach","coach_name","user","user_name","rating","review","created_at","updated_at",]
+        read_only_fields = ["id","user","created_at","updated_at",]
+
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError(
+                "Rating must be between 1 and 5."
+            )
+        return value
+
+
+class AppRatingSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+    class Meta:
+        model = AppRating
+        fields = ["id", "user", "user_name", "rating", "review", "created_at", "updated_at"]
+        read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("Rating must be between 1 and 5.")
+        return value
+
+
+class AppRatinglistSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+    image=serializers.ImageField(source="user.image", read_only=True)
+    class Meta:
+        model = AppRating
+        fields = ["id", "user", "user_name", "image", "rating", "review", "created_at", "updated_at"]
+        read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+
+class UserServiceSerializer(serializers.ModelSerializer):
+    benefits = serializers.SerializerMethodField(read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
+
+    class Meta:
+        model = Service
+        fields = [
+            "id",
+            "title",
+            "description",
+            "service_type",
+            "session_format",
+            "session_duration",
+            "currency",
+            "price",
+            "booking_type",
+            "who_is_this_service_for",
+            "preparation_instructions",
+            "cancellation_policy",
+            "status",
+            "benefits",
+            "category_name",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_benefits(self, obj):
+        return [benefit.outcome for benefit in obj.benefits.all()]
+
+
+class CoachProfileDetailSerializer(serializers.ModelSerializer):
+    user = UserSimpleSerializer(read_only=True)
+    categories = serializers.StringRelatedField(many=True, read_only=True)
+    certifications = CertificationSerializer(many=True, read_only=True)
+    qualifications = QualificationSerializer(many=True, read_only=True)
+    avg_rating = serializers.FloatField(read_only=True, default=0.0)
+    services = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = CoachProfile
+        fields = [
+            "id",
+            "user",
+            "profile_photo",
+            "introduction_video",
+            "about",
+            "expertises",
+            "is_completed",
+            "status",
+            "categories",
+            "certifications",
+            "qualifications",
+            "avg_rating",
+            "services",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_services(self, obj):
+        # Retrieve all published services for the coach (matching user account)
+        services = Service.objects.filter(coach=obj.user, status="published")
+        return UserServiceSerializer(services, many=True).data
+    
+    
+    
+class BlogCoachSerializer(serializers.ModelSerializer):
+    profile_photo = serializers.SerializerMethodField(read_only=True)
+    about = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "full_name", "email", "phone_number", "profile_photo", "about"]
+
+    def get_profile_photo(self, obj):
+        profile = getattr(obj, 'coach_profile', None)
+        if profile and profile.profile_photo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(profile.profile_photo.url)
+            return profile.profile_photo.url
+        return None
+
+    def get_about(self, obj):
+        profile = getattr(obj, 'coach_profile', None)
+        return profile.about if profile else None
+
+
+class UserBlogSerializer(serializers.ModelSerializer):
+    category_details = serializers.SerializerMethodField(read_only=True)
+    coach = BlogCoachSerializer(read_only=True)
+
+    class Meta:
+        model = Blog
+        fields = [
+            'id',
+            'coach',
+            'category',
+            'category_details',
+            'title',
+            'content',
+            'image',
+            'status',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['coach', 'created_at', 'updated_at']
+
+    def get_category_details(self, obj):
+        if not obj.category:
+            return None
+        return {
+            'id': obj.category.id,
+            'name': obj.category.name,
+            'description': obj.category.description,
+        }

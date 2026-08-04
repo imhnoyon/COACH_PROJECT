@@ -1,5 +1,5 @@
 from django.db import models
-from Provider.models import Category
+from Provider.models import Category, CoachProfile
 from Authentication.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 
@@ -26,9 +26,9 @@ class Post(models.Model):
     
     
 class CoachRating(models.Model):
-    coach = models.ForeignKey(User, on_delete=models.CASCADE, related_name='coach_ratings')
+    coach = models.ForeignKey(CoachProfile, on_delete=models.CASCADE, related_name='coach_ratings')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_ratings')
-    rating = models.PositiveSmallIntegerField(default=0, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     review = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -43,13 +43,13 @@ class CoachRating(models.Model):
         return 0
 
     def __str__(self):
-        return f"Rating by {self.user.full_name} for {self.coach.full_name}: {self.rating}"
-    
-    
-    
+        return f"Rating by {self.user.full_name} for {self.coach.user.full_name}: {self.rating}"
+
+
+
 class AppRating(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='app_ratings')
-    rating = models.PositiveSmallIntegerField(default=0,validators=[MinValueValidator(1), MaxValueValidator(5)])
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     review = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

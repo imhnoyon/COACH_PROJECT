@@ -430,6 +430,9 @@ class BlogCreateView(APIView):
             status_code=status.HTTP_200_OK
         )
         
+
+        
+        
         
         
 class ProductCreateView(APIView):
