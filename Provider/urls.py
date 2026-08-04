@@ -4,8 +4,6 @@ from Payments.views import BookingRejectView
 
 urlpatterns = [
     path('categories-list/', CategoryListView.as_view(), name='category-list'),
-
-
     path('coach-profile/', CoachProfileView.as_view(), name='coach-profile'),
     path('provider-list-profile/', CoachProfileListView.as_view(), name='provider-profile'),
     path('provider-list-profile/<int:profile_id>/', CoachProfileListView.as_view(), name='provider-profile'),

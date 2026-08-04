@@ -251,3 +251,30 @@ class BlogDetailView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+        
+        
+        
+class DigitalProductListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        digital_products = Product.objects.filter(status="published").select_related('category', 'coach', 'coach__coach_profile')
+        serializer = DigitalProductSerializer(digital_products, many=True, context={'request': request})
+        return APIResponse.success(
+            message="Digital products retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+class UserServiceListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        services = Service.objects.filter(status="published").select_related('coach', 'coach__coach_profile').prefetch_related('benefits')
+        serializer = userServiceCreateSerializer(services, many=True, context={'request': request})
+        return APIResponse.success(
+            message="Services retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )

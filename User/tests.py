@@ -3,7 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from Authentication.models import User
-from Provider.models import CoachProfile, Service, Blog
+from Provider.models import CoachProfile, Service, Blog, Product
 from Payments.models import ServiceBooking
 from User.models import CoachRating, AppRating
 
@@ -513,6 +513,72 @@ class UserBlogListTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         blogs = response.data['data']
         self.assertEqual(len(blogs), 0)
+
+
+class DigitalProductListTests(APITestCase):
+
+    def setUp(self):
+        # Create category
+        self.category = Category.objects.create(name="Design", description="Design coaching")
+        
+        # Create user / customer
+        self.customer = User.objects.create_user(
+            email="customer_prod@example.com",
+            password="password123",
+            full_name="John Customer",
+            role="User"
+        )
+        
+        # Create coach / provider user
+        self.provider_user = User.objects.create_user(
+            email="provider_prod@example.com",
+            password="password123",
+            full_name="Sarah Chen",
+            role="Provider"
+        )
+        
+        # Create Coach Profile
+        self.coach_profile = CoachProfile.objects.create(
+            user=self.provider_user,
+            about="Expert UI/UX Designer",
+            is_completed=True,
+            status="approved"
+        )
+        
+        # Create a product post
+        self.product = Product.objects.create(
+            coach=self.provider_user,
+            category=self.category,
+            title="UI/UX Design Book",
+            description="Learn how to design amazing products.",
+            price=Decimal("29.99"),
+            status="published"
+        )
+
+        self.url = reverse('digital-product-list')
+
+    def test_digital_product_list_returns_coach_details(self):
+        self.client.force_authenticate(user=self.customer)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        
+        products = response.data['data']
+        self.assertEqual(len(products), 1)
+        
+        product_data = products[0]
+        self.assertEqual(product_data['title'], "UI/UX Design Book")
+        self.assertEqual(product_data['price'], "29.99")
+        
+        # Check nested coach details
+        coach_details = product_data['coach']
+        self.assertIsNotNone(coach_details)
+        self.assertEqual(coach_details['id'], self.provider_user.id)
+        self.assertEqual(coach_details['full_name'], "Sarah Chen")
+        self.assertEqual(coach_details['email'], "provider_prod@example.com")
+        self.assertEqual(coach_details['about'], "Expert UI/UX Designer")
+
 
 
 

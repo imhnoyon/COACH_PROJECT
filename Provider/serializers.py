@@ -96,7 +96,7 @@ class ServiceCreateSerializer(serializers.ModelSerializer):
         source='category',
         write_only=True
     )
-
+    
     class Meta:
         model = Service
         fields = [

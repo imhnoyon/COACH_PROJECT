@@ -1,7 +1,8 @@
+from django.db.models.aggregates import Avg
 from rest_framework import serializers
 from Authentication.models import User
 from Administration.models import Category
-from Provider.models import CoachProfile, Service, Blog
+from Provider.models import CoachProfile, Product, Service, Blog
 from Provider.serializers import CertificationSerializer, QualificationSerializer
 from .models import *
 
@@ -179,12 +180,18 @@ class CoachProfileDetailSerializer(serializers.ModelSerializer):
 class BlogCoachSerializer(serializers.ModelSerializer):
     profile_photo = serializers.SerializerMethodField(read_only=True)
     about = serializers.SerializerMethodField(read_only=True)
+    rating = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "email", "phone_number", "profile_photo", "about"]
+        fields = ["id", "full_name", "email", "phone_number",'rating', "profile_photo", "about"]
 
     def get_profile_photo(self, obj):
+        if getattr(obj, 'image', None):
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
         profile = getattr(obj, 'coach_profile', None)
         if profile and profile.profile_photo:
             request = self.context.get('request')
@@ -196,6 +203,13 @@ class BlogCoachSerializer(serializers.ModelSerializer):
     def get_about(self, obj):
         profile = getattr(obj, 'coach_profile', None)
         return profile.about if profile else None
+    
+    def get_rating(self, obj):
+        profile = getattr(obj, 'coach_profile', None)
+        if profile:
+            avg_rating = CoachRating.objects.filter(coach=profile).aggregate(avg=Avg('rating'))['avg']
+            return avg_rating if avg_rating is not None else 0.0
+        return 0.0
 
 
 class UserBlogSerializer(serializers.ModelSerializer):
@@ -226,3 +240,83 @@ class UserBlogSerializer(serializers.ModelSerializer):
             'name': obj.category.name,
             'description': obj.category.description,
         }
+        
+
+        
+        
+class DigitalProductSerializer(serializers.ModelSerializer):
+    category_details = serializers.SerializerMethodField(read_only=True)
+    coach = BlogCoachSerializer(read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            'id',
+            'coach',
+            'category',
+            'category_details',
+            'title',
+            'description',
+            'Thumbnail',
+            'book_file',
+            'price',
+            'status',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['coach', 'created_at', 'updated_at']
+
+    def get_category_details(self, obj):
+        if not obj.category:
+            return None
+        return {
+            'id': obj.category.id,
+            'name': obj.category.name,
+            'description': obj.category.description,
+        }
+        
+
+
+
+class userServiceCreateSerializer(serializers.ModelSerializer):
+    category = serializers.SerializerMethodField(read_only=True)
+    # coach = BlogCoachSerializer(read_only=True)
+    provider_details = BlogCoachSerializer(source='coach', read_only=True)
+    coach_id = serializers.IntegerField(source='coach.id', read_only=True)
+   
+    
+    class Meta:
+        model = Service
+        fields = [
+            'id',
+            'coach_id',
+            # 'coach',
+            'provider_details',
+            'title',
+            'description',
+            'service_type',
+            'session_format',
+            'session_duration',
+            'currency',
+            'price',
+            'booking_type',
+            'who_is_this_service_for',
+            'preparation_instructions',
+            'cancellation_policy',
+            'session_url',
+            'status',
+            'category',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['coach', 'created_at', 'updated_at']
+        
+    def get_category(self, obj):
+        if not obj.category:
+            return None
+        return {
+            'id': obj.category.id,
+            'name': obj.category.name,
+            'description': obj.category.description,
+        }
+
