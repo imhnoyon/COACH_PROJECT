@@ -21,7 +21,7 @@ urlpatterns = [
     path('user-products-list/', ProductsListView.as_view(), name='product-list'),
     path('services-bookings-list/', ServiceBookingPendingAPIView.as_view(), name='service-booking-list'),
     path('service-accept/<int:booking_id>/', markAsConfirmedAPIView.as_view(), name='service-booking-accept'),
-    # path('service-reject/<int:booking_id>/', BookingRejectView.as_view(), name='service-booking-reject'),
+    path('service-reject/<int:booking_id>/', BookingRejectView.as_view(), name='service-booking-reject'),
 
     
 

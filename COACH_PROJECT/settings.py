@@ -197,4 +197,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'Provider.tasks.update_expired_service_bookings',
         'schedule': crontab(minute='*/1'),
     },
-}
+}
+
+
+RESHEDULED_BOOKING_TIME = 6
+
+# Cancellation Policy Settings
+DEFAULT_CANCELLATION_NOTICE_HOURS = 5
+STANDARD_CANCELLATION_NOTICE_HOURS = 6

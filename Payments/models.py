@@ -34,6 +34,7 @@ class ServiceBooking(models.Model):
     refund_status = models.CharField(max_length=20, blank=True, null=True)
     refund_id = models.CharField(max_length=255, blank=True, null=True)
     refunded_at = models.DateTimeField(blank=True, null=True)
+    is_rescheduled = models.BooleanField(default=False)
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

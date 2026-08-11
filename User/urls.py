@@ -16,5 +16,11 @@ urlpatterns = [
     path('digital-product-detail/<int:product_id>/', DigitalProductDetailsView.as_view(), name='digital-product-detail'),
     path('user-service-list/', UserServiceListView.as_view(), name='user-service-list'),
     path('user-service-detail/<int:service_id>/', UserServiceDetailView.as_view(), name='user-service-detail'),
+    
+    # Booking related endpoints
+    path('user-booking-list/', BookingServicesListAPIView.as_view(), name='user-booking-list'),
+    path('user-booking-detail/<int:booking_id>/', BookingDetailsSerializerView.as_view(), name='user-booking-detail'),
+    path('user-booking-reschedule/<int:booking_id>/', BookingRescheduleAPIView.as_view(), name='user-booking-reschedule'),
+    path('user-booking-cancel/<int:booking_id>/', BookingCancelAPIView.as_view(), name='user-booking-cancel'),
 
 ]

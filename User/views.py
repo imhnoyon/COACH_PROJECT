@@ -1,6 +1,13 @@
+import os
+import logging
+import stripe
+from datetime import datetime, timedelta
+from django.conf import settings
+from django.utils import timezone
+from django.db import transaction
 from django.shortcuts import render
 from rest_framework import status
-from rest_framework.views import APIView
+from rest_framework.views import APIView, Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Avg, Count, Q
 from django.db.models.functions import Coalesce
@@ -10,7 +17,10 @@ from User.models import CoachRating, AppRating
 from .serializers import *
 from utils.api_response import APIResponse
 
-from Payments.models import ServiceBooking
+from Payments.models import ServiceBooking, PaymentTransaction
+
+logger = logging.getLogger(__name__)
+stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None) or os.environ.get('STRIPE_SECRET_KEY')
 
 class PostCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -318,3 +328,304 @@ class UserServiceDetailView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+        
+        
+        
+
+
+class BookingServicesListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        status_filter = request.query_params.get('status', None) or request.query_params.get('status_filter', None)
+        
+        bookings = ServiceBooking.objects.filter(
+            user=request.user,
+            service__isnull=False,
+            payment_status="paid"
+        )
+        
+        if status_filter:
+            bookings = bookings.filter(status=status_filter)
+            
+        bookings = bookings.select_related('service', 'service__category', 'service__coach').order_by('-id')
+
+        serializer = BookingServicesSerializer(
+            bookings,
+            many=True,
+            context={'request': request}
+        )
+
+        return APIResponse.success(
+            message="User bookings retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class BookingDetailsSerializerView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, booking_id):
+        try:
+            booking = ServiceBooking.objects.select_related('service', 'service__category', 'service__coach').get(
+                id=booking_id,
+                user=request.user,
+                service__isnull=False
+            )
+        except ServiceBooking.DoesNotExist:
+            return APIResponse.error(
+                message="Booking not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = BookingServicesSerializer(booking, context={'request': request})
+        return APIResponse.success(
+            message="Booking details retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class BookingRescheduleAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, booking_id):
+        return self._reschedule(request, booking_id)
+
+    def patch(self, request, booking_id):
+        return self._reschedule(request, booking_id)
+
+    def _reschedule(self, request, booking_id):
+        try:
+            booking = ServiceBooking.objects.select_related('coach', 'service').get(id=booking_id, user=request.user)
+        except ServiceBooking.DoesNotExist:
+            return APIResponse.error(
+                message="Booking not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        if not booking.service:
+            return APIResponse.error(
+                message="Only service session bookings can be rescheduled.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if booking.status in ["completed", "cancelled", "rejected"]:
+            return APIResponse.error(
+                message=f"Cannot reschedule a booking that is already {booking.status}.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if getattr(booking, 'is_rescheduled', False):
+            return APIResponse.error(
+                message="This booking has already been rescheduled once. Further rescheduling is not allowed.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check reschedule cutoff hours from settings
+        reschedule_hours = getattr(settings, 'RESHEDULED_BOOKING_TIME', 6)
+        if booking.booking_date and booking.booking_time:
+            current_schedule_dt = datetime.combine(booking.booking_date, booking.booking_time)
+            if getattr(settings, 'USE_TZ', False):
+                current_schedule_dt = timezone.make_aware(current_schedule_dt, timezone.get_current_timezone())
+
+            now = timezone.now() if getattr(settings, 'USE_TZ', False) else datetime.now()
+
+            if current_schedule_dt <= now:
+                return APIResponse.error(
+                    message="Cannot reschedule a booking whose scheduled time has already passed.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            time_remaining = current_schedule_dt - now
+            if time_remaining < timedelta(hours=reschedule_hours):
+                return APIResponse.error(
+                    message=f"Bookings can only be rescheduled at least {reschedule_hours} hours before the scheduled time.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+        serializer = BookingRescheduleSerializer(data=request.data)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation failed.",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        new_date = serializer.validated_data['booking_date']
+        new_time = serializer.validated_data['booking_time']
+
+        # Check if the requested date and time are the same as current schedule
+        if booking.booking_date == new_date and booking.booking_time == new_time:
+            return APIResponse.error(
+                message="The requested date and time are the same as your current schedule. Please choose a different date or time.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check that new schedule is in the future
+        new_schedule_dt = datetime.combine(new_date, new_time)
+        if getattr(settings, 'USE_TZ', False):
+            new_schedule_dt = timezone.make_aware(new_schedule_dt, timezone.get_current_timezone())
+
+        now = timezone.now() if getattr(settings, 'USE_TZ', False) else datetime.now()
+        if new_schedule_dt <= now:
+            return APIResponse.error(
+                message="The new booking date and time must be in the future.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if the coach already has another active booking at that date and time
+        conflict_exists = ServiceBooking.objects.filter(
+            coach=booking.coach,
+            booking_date=new_date,
+            booking_time=new_time
+        ).exclude(id=booking.id)\
+         .exclude(status__in=['cancelled', 'rejected'])\
+         .exclude(payment_status='failed')\
+         .exists()
+
+        if conflict_exists:
+            return APIResponse.error(
+                message="This time slot is already booked for this coach. Please choose another date or time.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking.booking_date = new_date
+        booking.booking_time = new_time
+        booking.is_rescheduled = True
+        booking.save()
+
+        res_serializer = BookingServicesSerializer(booking, context={'request': request})
+        return APIResponse.success(
+            message="Booking rescheduled successfully.",
+            data=res_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class BookingCancelAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, booking_id):
+        return self._cancel(request, booking_id)
+
+    def patch(self, request, booking_id):
+        return self._cancel(request, booking_id)
+
+    def _cancel(self, request, booking_id):
+        try:
+            with transaction.atomic():
+                try:
+                    booking = ServiceBooking.objects.select_for_update().select_related('coach', 'service').get(
+                        id=booking_id,
+                        user=request.user
+                    )
+                except ServiceBooking.DoesNotExist:
+                    return APIResponse.error(
+                        message="Booking not found.",
+                        status_code=status.HTTP_404_NOT_FOUND
+                    )
+
+                if not booking.service or booking.product_id is not None:
+                    return APIResponse.error(
+                        message="Only service bookings can be cancelled.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if booking.status == "cancelled":
+                    return APIResponse.error(
+                        message="This booking is already cancelled.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if booking.status == "completed":
+                    return APIResponse.error(
+                        message="Cannot cancel a completed booking.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if booking.status == "rejected":
+                    return APIResponse.error(
+                        message="This booking has already been rejected.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if booking.payment_status == "refunded" or booking.refund_status == "completed" or booking.refund_id:
+                    return APIResponse.error(
+                        message="This booking has already been refunded.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Evaluate cancellation policy rules (flexible, standard, strict, default)
+                from Payments.cancellation_policy import CancellationPolicyService
+                is_allowed, error_message = CancellationPolicyService.validate_cancellation(booking)
+                if not is_allowed:
+                    return APIResponse.error(
+                        message=error_message,
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # If payment was completed ("paid"), trigger Stripe refund
+                if booking.payment_status == "paid":
+                    payment_tx = PaymentTransaction.objects.filter(booking=booking).first()
+                    if payment_tx and payment_tx.stripe_payment_intent_id:
+                        from Payments.stripe_refund import StripeRefundService
+                        StripeRefundService.refund_booking(
+                            booking,
+                            new_status="cancelled",
+                            description=f"Refund debit for cancelled booking #{booking.id}"
+                        )
+                    else:
+                        booking.payment_status = "refunded"
+                        booking.refund_status = "completed"
+                        booking.refunded_at = timezone.now()
+                        booking.status = "cancelled"
+                        booking.save()
+                else:
+                    booking.status = "cancelled"
+                    booking.save()
+
+            res_serializer = BookingServicesSerializer(booking, context={"request": request})
+            return APIResponse.success(
+                message="Booking successfully cancelled and amount refunded to your account.",
+                data=res_serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+
+        except stripe.error.InvalidRequestError as e:
+            logger.error(f"Stripe InvalidRequestError during cancellation of booking {booking_id}: {str(e)}")
+            return APIResponse.error(
+                message=f"Refund failed: Invalid request: {str(e)}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except stripe.error.CardError as e:
+            logger.error(f"Stripe CardError during cancellation of booking {booking_id}: {str(e)}")
+            return APIResponse.error(
+                message=f"Refund failed: Card declined: {e.user_message or str(e)}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except stripe.error.APIConnectionError as e:
+            logger.error(f"Stripe APIConnectionError during cancellation of booking {booking_id}: {str(e)}")
+            return APIResponse.error(
+                message="Refund failed: Stripe network connectivity issue.",
+                status_code=status.HTTP_502_BAD_GATEWAY
+            )
+        except stripe.error.RateLimitError as e:
+            logger.error(f"Stripe RateLimitError during cancellation of booking {booking_id}: {str(e)}")
+            return APIResponse.error(
+                message="Refund failed: Stripe rate limit exceeded.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        except stripe.error.StripeError as e:
+            logger.error(f"StripeError during cancellation of booking {booking_id}: {str(e)}")
+            return APIResponse.error(
+                message=f"Stripe refund failed: {e.user_message or str(e)}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during cancellation of booking {booking_id}: {str(e)}")
+            return APIResponse.error(
+                message=f"An unexpected error occurred: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -1,3 +1,4 @@
+from datetime import datetime, date
 from django.db.models.aggregates import Avg
 from rest_framework import serializers
 from Authentication.models import User
@@ -5,6 +6,7 @@ from Administration.models import Category
 from Provider.models import CoachProfile, Product, Service, Blog
 from Provider.serializers import CertificationSerializer, QualificationSerializer
 from .models import *
+from Payments.models import ServiceBooking
 
 class PostCreateSerializer(serializers.ModelSerializer):
     category = serializers.CharField(source="category.name", read_only=True)
@@ -453,3 +455,41 @@ class userServiceDetailsSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         other_services = Service.objects.filter(coach=obj.coach, status="published").exclude(id=obj.id)
         return userServiceCreateSerializer(other_services, many=True, context={'request': request}).data
+    
+    
+    
+    
+class BookingServicesSerializer(serializers.ModelSerializer):
+    service_title = serializers.CharField(source="service.title", read_only=True)
+    service_category = serializers.CharField(source="service.category.name", read_only=True)
+    service_type = serializers.CharField(source="service.service_type", read_only=True)
+    session_format = serializers.CharField(source="service.session_format", read_only=True)
+    session_duration = serializers.CharField(source="service.session_duration", read_only=True)
+    session_link = serializers.CharField(source="service.session_url", read_only=True)
+    coach_name = serializers.CharField(source="service.coach.full_name", read_only=True)
+    # coach_profile_photo = serializers.SerializerMethodField(read_only=True)
+    cancellation_policy= serializers.CharField(source="service.cancellation_policy", read_only=True)
+
+    class Meta:
+        model = ServiceBooking
+        fields = ['id', 'coach_name', 'service_title', 'service_category', 'service_type', 'session_format', 'session_duration', 'session_link', 'booking_date', 'booking_time', 'amount','cancellation_policy', 'status', 'payment_status', 'payment_method', 'is_rescheduled']
+
+
+class BookingRescheduleSerializer(serializers.Serializer):
+    booking_date = serializers.DateField(required=True)
+    booking_time = serializers.CharField(required=True)
+
+    def validate_booking_date(self, value):
+        if value < date.today():
+            raise serializers.ValidationError("Booking date cannot be in the past.")
+        return value
+
+    def validate_booking_time(self, value):
+        time_formats = ['%I:%M %p', '%I:%M%p', '%H:%M:%S', '%H:%M']
+        for fmt in time_formats:
+            try:
+                parsed_time = datetime.strptime(str(value).strip(), fmt).time()
+                return parsed_time
+            except ValueError:
+                continue
+        raise serializers.ValidationError("Invalid time format. Example formats: '11:00 AM' or '11:00:00'.")

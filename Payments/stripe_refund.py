@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class StripeRefundService:
     @classmethod
-    def refund_booking(cls, booking: ServiceBooking):
+    def refund_booking(cls, booking: ServiceBooking, new_status="rejected", description=None):
         """
         Handles Stripe refund for a ServiceBooking.
         If a connected Stripe transfer exists, it reverses the transfer from the coach and
@@ -71,7 +71,7 @@ class StripeRefundService:
         booking.refund_status = "completed"
         booking.refund_id = refund_id
         booking.refunded_at = timezone.now()
-        booking.status = "rejected"
+        booking.status = new_status
         booking.save()
         payment_tx.status = "refunded"
         payment_tx.save()
@@ -79,12 +79,14 @@ class StripeRefundService:
         wallet, _ = ProviderWallet.objects.get_or_create(user=booking.coach)
         wallet.balance = wallet.balance - payment_tx.provider_amount
         wallet.save()
+        if not description:
+            description = f"Refund debit for {new_status} booking #{booking.id}"
         WalletTransaction.objects.create(
             wallet=wallet,
             transaction_type='debit',
             amount=payment_tx.provider_amount,
             balance_after=wallet.balance,
-            description=f"Refund debit for rejected booking #{booking.id}",
+            description=description,
             booking=booking
         )
         
