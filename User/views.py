@@ -629,3 +629,50 @@ class BookingCancelAPIView(APIView):
                 message=f"An unexpected error occurred: {str(e)}",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+            
+            
+class UserProductsListView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user_products = ServiceBooking.objects.filter(
+            user=request.user,
+            product__isnull=False,
+            payment_status="paid"
+        ).select_related('product', 'product__category', 'product__coach', 'product__coach__coach_profile').order_by('-id')
+
+        serializer = ProductBuyinglistSerializer(
+            user_products,
+            many=True,
+            context={'request': request}
+        )
+
+        return APIResponse.success(
+            message="User purchased products retrieved successfully.",
+            data=serializer.data,
+        )
+        
+        
+        
+class UserproductDetailsSerializerView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, booking_id):
+        try:
+            booking = ServiceBooking.objects.select_related('product', 'product__category', 'product__coach', 'product__coach__coach_profile').get(
+                id=booking_id,
+                user=request.user,
+                product__isnull=False
+            )
+        except ServiceBooking.DoesNotExist:
+            return APIResponse.error(
+                message="Product booking not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ProductBuyinglistSerializer(booking, context={'request': request})
+        return APIResponse.success(
+            message="Product booking details retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )

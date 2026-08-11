@@ -22,5 +22,7 @@ urlpatterns = [
     path('user-booking-detail/<int:booking_id>/', BookingDetailsSerializerView.as_view(), name='user-booking-detail'),
     path('user-booking-reschedule/<int:booking_id>/', BookingRescheduleAPIView.as_view(), name='user-booking-reschedule'),
     path('user-booking-cancel/<int:booking_id>/', BookingCancelAPIView.as_view(), name='user-booking-cancel'),
+    path('user-product-list/', UserProductsListView.as_view(), name='user-product-list'),
+    path('user-product-detail/<int:booking_id>/', UserproductDetailsSerializerView.as_view(), name='user-product-detail'),
 
 ]

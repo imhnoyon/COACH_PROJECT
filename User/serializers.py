@@ -469,10 +469,11 @@ class BookingServicesSerializer(serializers.ModelSerializer):
     coach_name = serializers.CharField(source="service.coach.full_name", read_only=True)
     # coach_profile_photo = serializers.SerializerMethodField(read_only=True)
     cancellation_policy= serializers.CharField(source="service.cancellation_policy", read_only=True)
+    provider_user_id = serializers.IntegerField(source="service.coach.id", read_only=True)
 
     class Meta:
         model = ServiceBooking
-        fields = ['id', 'coach_name', 'service_title', 'service_category', 'service_type', 'session_format', 'session_duration', 'session_link', 'booking_date', 'booking_time', 'amount','cancellation_policy', 'status', 'payment_status', 'payment_method', 'is_rescheduled']
+        fields = ['id', 'provider_user_id', 'coach_name', 'service_title', 'service_category', 'service_type', 'session_format', 'session_duration', 'session_link', 'booking_date', 'booking_time', 'amount','cancellation_policy', 'status', 'payment_status', 'payment_method', 'is_rescheduled']
 
 
 class BookingRescheduleSerializer(serializers.Serializer):
@@ -493,3 +494,78 @@ class BookingRescheduleSerializer(serializers.Serializer):
             except ValueError:
                 continue
         raise serializers.ValidationError("Invalid time format. Example formats: '11:00 AM' or '11:00:00'.")
+    
+    
+    
+    
+class ProductBuyinglistSerializer(serializers.ModelSerializer):
+    product_title = serializers.CharField(source="product.title", read_only=True)
+    product_category = serializers.CharField(source="product.category.name", read_only=True)
+    product_price = serializers.DecimalField(source="product.price", max_digits=10, decimal_places=2, read_only=True)
+    coach_name = serializers.CharField(source="product.coach.full_name", read_only=True)
+    coach_profile_photo = serializers.SerializerMethodField(read_only=True)
+    Thumbnail = serializers.SerializerMethodField(read_only=True)
+    book_file= serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = ServiceBooking
+        fields = ['id', 'coach_name', 'product_title', 'product_category', 'product_price','payment_status', 'coach_profile_photo','created_at','Thumbnail','book_file']  
+        
+    def get_coach_profile_photo(self, obj):
+        if not obj.product or not obj.product.coach:
+            return None
+        coach = obj.product.coach
+        request = self.context.get('request')
+        url = None
+
+        if hasattr(coach, 'coach_profile') and coach.coach_profile and coach.coach_profile.profile_photo:
+            try:
+                url = coach.coach_profile.profile_photo.url
+            except Exception:
+                url = None
+        elif coach.image:
+            try:
+                url = coach.image.url
+            except Exception:
+                url = None
+
+        if url and request and not url.startswith('http'):
+            return request.build_absolute_uri(url)
+        return url
+    
+    def get_Thumbnail(self, obj):
+        if not obj.product:
+            return None
+        product = obj.product
+        request = self.context.get('request')
+        url = None
+
+        if product.Thumbnail:
+            try:
+                url = product.Thumbnail.url
+            except Exception:
+                url = None
+
+        if url and request and not url.startswith('http'):
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_book_file(self, obj):
+        if not obj.product:
+            return None
+        product = obj.product
+        request = self.context.get('request')
+        url = None
+
+        if product.book_file:
+            try:
+                url = product.book_file.url
+            except Exception:
+                url = None
+
+        if url and request and not url.startswith('http'):
+            return request.build_absolute_uri(url)
+        return url
+        
+        
+    

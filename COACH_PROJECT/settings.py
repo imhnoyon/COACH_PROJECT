@@ -29,6 +29,7 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -36,16 +37,17 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
+    'channels',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'corsheaders',
+
     'Authentication',
     'Administration',
     'Provider',
     'User',
     'Payments',
-    
-    # Third party packages
-    'rest_framework',
-    'rest_framework_simplejwt',
-    'corsheaders',
+    'Message',
 ]
 
 MIDDLEWARE = [
@@ -79,6 +81,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'COACH_PROJECT.wsgi.application'
+ASGI_APPLICATION = 'COACH_PROJECT.asgi.application'
 
 
 # Database
@@ -199,9 +202,28 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-
 RESHEDULED_BOOKING_TIME = 6
 
 # Cancellation Policy Settings
 DEFAULT_CANCELLATION_NOTICE_HOURS = 5
 STANDARD_CANCELLATION_NOTICE_HOURS = 6
+
+# Channels & WebSocket Configuration
+REDIS_URL = env('REDIS_URL', default=env('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0'))
+USE_IN_MEMORY_CHANNEL_LAYER = env.bool('USE_IN_MEMORY_CHANNEL_LAYER', default=False)
+
+if USE_IN_MEMORY_CHANNEL_LAYER:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [REDIS_URL],
+            },
+        },
+    }

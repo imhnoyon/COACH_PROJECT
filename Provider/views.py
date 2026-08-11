@@ -430,7 +430,15 @@ class BlogCreateView(APIView):
             status_code=status.HTTP_200_OK
         )
         
-
+    def get(self, request):
+        """Retrieve all blogs for the authenticated coach."""
+        blogs = Blog.objects.filter(coach=request.user)
+        serializer = BlogSerializer(blogs, many=True, context={'request': request})
+        return APIResponse.success(
+            message="Blogs retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
         
         
         
