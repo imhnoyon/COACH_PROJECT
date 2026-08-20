@@ -22,7 +22,7 @@ class QualificationSerializer(serializers.ModelSerializer):
 class UserSimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'full_name', 'email', 'phone_number','latitude', 'longitude',]
+        fields = ['id', 'full_name', 'email', 'phone_number','address',]
 
 
 class CoachProfileDetailSerializer(serializers.ModelSerializer):
@@ -59,6 +59,7 @@ class CreateCoachProfileSerializer(serializers.ModelSerializer):
     )
     profile_photo = serializers.ImageField(required=False)
     about = serializers.CharField(required=False)
+  
 
     class Meta:
         model = CoachProfile
@@ -79,6 +80,63 @@ class CreateCoachProfileSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("Expertises must be a list of strings.")
         return value
+
+class CreateCoachProfilePatchSerializer(serializers.ModelSerializer):
+    category_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        many=True,
+        write_only=True,
+        required=False
+    )
+    profile_photo = serializers.ImageField(required=False)
+    about = serializers.CharField(required=False)
+    full_name = serializers.CharField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True)
+    address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    class Meta:
+        model = CoachProfile
+        fields = [
+            'profile_photo',
+            'full_name',
+            'phone_number',
+            'address',
+            'about',
+            'category_ids',
+            'introduction_video',
+            'expertises',
+        ]
+
+    def validate_expertises(self, value):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except Exception:
+                value = [x.strip() for x in value.split(',') if x.strip()]
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Expertises must be a list of strings.")
+        return value
+
+    def update(self, instance, validated_data):
+        user = instance.user
+        user_updated = False
+        if 'full_name' in validated_data:
+            user.full_name = validated_data.pop('full_name')
+            user_updated = True
+        if 'phone_number' in validated_data:
+            user.phone_number = validated_data.pop('phone_number')
+            user_updated = True
+        if 'address' in validated_data:
+            user.address = validated_data.pop('address')
+            user_updated = True
+        if user_updated:
+            user.save()
+
+        categories = validated_data.pop('category_ids', None)
+        if categories is not None:
+            instance.categories.set(categories)
+
+        return super().update(instance, validated_data)
 
 
 # Service creation serializer
@@ -249,6 +307,5 @@ class ServiceBookingPendingSerializer(serializers.ModelSerializer):
             'price': obj.service.price,
             'currency': obj.service.currency,
         }
-        
         
         

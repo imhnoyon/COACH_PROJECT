@@ -29,7 +29,7 @@ class CategoryListView(APIView):
 
 class CoachProfileView(APIView):
     permission_classes = [IsAuthenticated,IsProviderUser]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self, user):
         return CoachProfile.objects.filter(user=user)\
@@ -108,7 +108,7 @@ class CoachProfileView(APIView):
 
         category_ids = request.POST.getlist('category_ids') or request.POST.getlist('category_ids[]')
 
-        serializer = CreateCoachProfileSerializer(profile, data=request.data, partial=True)
+        serializer = CreateCoachProfilePatchSerializer(profile, data=request.data, partial=True)
         if not serializer.is_valid():
             return APIResponse.error(
                 message="Validation error",
@@ -531,7 +531,6 @@ class ProviderWalletView(APIView):
     permission_classes = [IsAuthenticated, IsProviderUser]
 
     def get(self, request):
-        """Retrieve the wallet details for the authenticated provider."""
         from decimal import Decimal
         import datetime
         from django.db.models import Sum

@@ -15,15 +15,13 @@ urlpatterns = [
     path('products/create/', ProductCreateView.as_view(), name='product-create'),
     path('products-list/', productListView.as_view(), name='product-list'),
     path('products/<int:product_id>/', ProductCreateView.as_view(), name='product-detail'),
-    
+
     #services list for provider
     path('services-list/', ServiceListView.as_view(), name='service-list'),
     path('user-products-list/', ProductsListView.as_view(), name='product-list'),
     path('services-bookings-list/', ServiceBookingPendingAPIView.as_view(), name='service-booking-list'),
     path('service-accept/<int:booking_id>/', markAsConfirmedAPIView.as_view(), name='service-booking-accept'),
     path('service-reject/<int:booking_id>/', BookingRejectView.as_view(), name='service-booking-reject'),
-
-    
 
     # Payment related endpoints
     path('provider-wallet/', ProviderWalletView.as_view(), name='provider-wallet'),

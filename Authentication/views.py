@@ -43,6 +43,8 @@ class RegistrationAPIView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+        
+
            
            
            
@@ -88,6 +90,8 @@ class VerifyEmailView(APIView):
             data={
                 **tokens,
                 "user_id": str(user.id),
+                "role": user.role,
+                "is_completed": user.coach_profile.is_completed if hasattr(user, 'coach_profile') else False,
             },
             status_code=status.HTTP_200_OK
         )
@@ -103,6 +107,18 @@ class SignInView(APIView):
         if not user or not user.check_password(password):
             return APIResponse.error(message="Invalid credentials", status_code=status.HTTP_400_BAD_REQUEST)
         
+        if not user.is_verified:
+            return Response(
+            {
+                "success": False,
+                "status": status.HTTP_403_FORBIDDEN,
+                "message": "Please verify your email address before logging in.",
+                "errors": {
+                    "user_id": str(user.id),
+                },
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        ) 
         if not user.is_active:
             return APIResponse.error(
                 message="Your account has been deactivated or banned. Please contact support at support@coach.com",
@@ -126,7 +142,7 @@ class SignInView(APIView):
                 **tokens,
                  "role": user.role,
                 "user_id": str(user.id),
-               
+                "is_completed": user.coach_profile.is_completed if hasattr(user, 'coach_profile') else False
             }
         ) 
         
